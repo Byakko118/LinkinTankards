@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linkin' Tankards — attack tester</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="tester-page">
+    <div id="tester-app">
+      <header class="top">
+        <div class="top-row">
+          <h1>Attack tester</h1>
+          <a class="nav-link" href="/">← Gameplay loop</a>
+        </div>
+        <p class="tag">
+          Click a panel (or Replay) to play that hop in isolation. Panels are 1:1 with the board. Slow it down or
+          freeze on the contact frame to judge whether the cards actually meet.
+        </p>
+        <div class="controls">
+          <label>
+            Speed
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="0.5">0.5×</option>
+              <option value="0.25">0.25×</option>
+              <option value="0.1">0.1×</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="freeze" /> Freeze on contact</label>
+          <button type="button" id="play-all">Play all</button>
+        </div>
+      </header>
+      <div id="gallery" class="gallery"></div>
+    </div>
+    <script type="module" src="/src/tester/main.ts"></script>
+  </body>
+</html>

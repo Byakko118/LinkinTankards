@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linkin' Tankards — gameplay loop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <header class="top">
+        <div class="top-row">
+          <h1>Linkin' Tankards</h1>
+          <a class="nav-link" href="/tester.html">Attack tester →</a>
+        </div>
+        <p class="tag">
+          Deal 5 → build the chain from your hand → resolve (stops at breaks)
+        </p>
+      </header>
+      <div id="board-host"></div>
+      <aside class="hud">
+        <div class="stat">
+          <span class="label">Turn</span>
+          <span id="turn-value">1</span>
+        </div>
+        <div class="stat">
+          <span class="label">Chain dmg</span>
+          <span id="damage-value">—</span>
+        </div>
+        <div class="stat wide">
+          <span class="label">Links</span>
+          <span id="links-value">deal to begin</span>
+        </div>
+        <div class="actions">
+          <button id="btn-deal" type="button">Deal 5</button>
+          <button id="btn-redraw" type="button" disabled>Redraw</button>
+          <button id="btn-clear" type="button" disabled>Clear line</button>
+          <button id="btn-resolve" type="button" disabled>Resolve</button>
+          <button id="btn-next" type="button" disabled>Next turn</button>
+        </div>
+        <p class="note">
+          Resolve with ≥1 card on the play line. Directed links: after G/S → G,K · after K/A → A,S. K lifts ground→air;
+          S slams air→ground. No G→A / A→G.
+        </p>
+      </aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
