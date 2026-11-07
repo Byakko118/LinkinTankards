@@ -144,10 +144,29 @@ button {
   border-radius: 3px;
   cursor: pointer;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  transition:
+    transform 140ms cubic-bezier(0.3, 1.4, 0.5, 1),
+    filter 160ms,
+    box-shadow 160ms,
+    opacity 220ms;
 }
 
 button:hover:not(:disabled) {
   filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+  filter: brightness(0.95);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  transition-duration: 40ms;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
 }
 
 button:disabled {
