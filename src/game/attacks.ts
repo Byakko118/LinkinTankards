@@ -57,6 +57,8 @@ export interface AttackContext {
   aborted: () => boolean;
   /** Offset the whole board (directional micro-shake); (0, 0) restores. */
   nudgeBoard: (dx: number, dy: number) => void;
+  /** Fires on the contact frame (hop impact or break snap), before any impact FX spawn. */
+  onContact?: () => void;
 }
 
 // ——— Tuning hooks (tester A/B, capture scripts) ———
@@ -512,6 +514,7 @@ class Scene {
   }
 
   markContact(): void {
+    this.ctx.onContact?.();
     if (freezeAfterContactMs === null) return;
     if (freezeSkip > 0) {
       freezeSkip -= 1;
