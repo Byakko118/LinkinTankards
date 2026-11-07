@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linkin' Tankards — vs CPU</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="pvc-app">
+      <header class="top">
+        <div class="top-row">
+          <h1>Linkin' Tankards</h1>
+          <nav class="nav-links">
+            <a class="nav-link" href="/">Solo loop →</a>
+            <a class="nav-link" href="/tester.html">Attack tester →</a>
+          </nav>
+        </div>
+        <p class="tag">PvC · HP duel · alternating attacks · 1 HP per valid hop</p>
+      </header>
+
+      <div id="match-setup" class="match-setup">
+        <p class="setup-label">Choose rival difficulty</p>
+        <div class="difficulty-row">
+          <button type="button" class="diff-btn" data-diff="easy">Easy</button>
+          <button type="button" class="diff-btn" data-diff="normal">Normal</button>
+          <button type="button" class="diff-btn" data-diff="hard">Hard</button>
+        </div>
+        <button type="button" id="btn-start" class="primary">Start match</button>
+      </div>
+
+      <div id="match-live" class="match-live hidden">
+        <div class="hp-bar">
+          <div class="fighter you">
+            <span class="who">You</span>
+            <span id="hp-player" class="hp">20</span>
+          </div>
+          <div class="round-pill">
+            <span class="label">Round</span>
+            <span id="round-value">1</span>
+          </div>
+          <div class="fighter cpu">
+            <span class="who">CPU</span>
+            <span id="hp-cpu" class="hp">20</span>
+          </div>
+        </div>
+        <p id="turn-banner" class="turn-banner">Your attack</p>
+        <div id="board-host"></div>
+        <aside class="hud">
+          <div class="stat">
+            <span class="label">Phase</span>
+            <span id="phase-value">—</span>
+          </div>
+          <div class="stat wide">
+            <span class="label">Line</span>
+            <span id="links-value">—</span>
+          </div>
+          <div class="actions">
+            <button id="btn-clear" type="button" disabled>Clear line</button>
+            <button id="btn-commit" type="button" disabled>Lock in</button>
+            <button id="btn-fast" type="button" class="ghost hidden">Fast-forward CPU</button>
+          </div>
+          <details class="legend">
+            <summary>Lane rules</summary>
+            <p>
+              After G/S (ground) → G, K · After K/A (air) → A, S. K lifts ground→air; S slams air→ground. No
+              straight G→A or A→G.
+            </p>
+          </details>
+        </aside>
+      </div>
+
+      <div id="match-result" class="match-result hidden">
+        <h2 id="result-title">Victory</h2>
+        <p id="result-detail"></p>
+        <button type="button" id="btn-rematch" class="primary">Rematch</button>
+      </div>
+    </div>
+    <script type="module" src="/src/pvc/main.ts"></script>
+  </body>
+</html>
