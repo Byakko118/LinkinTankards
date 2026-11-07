@@ -20,6 +20,7 @@ import {
   isLaneChanger,
   resolveChainDamage,
 } from './rules';
+import { hopDamageFromLinks } from './hopDamage';
 
 const W = 960;
 const H = 640;
@@ -31,6 +32,13 @@ const HAND_Y = 545;
 const MAX_SLOTS = 5;
 
 export type BoardPhase = 'empty' | 'building' | 'resolving' | 'resolved';
+
+export type ResolveDamageMode = 'cards' | 'hops';
+
+export interface ResolveOptions {
+  damageMode?: ResolveDamageMode;
+  onRecoil?: () => void | Promise<void>;
+}
 
 export interface BoardHudSnapshot {
   linksLabel: string;
@@ -67,6 +75,8 @@ export class GameBoard {
   private playNodes: Container[] = [];
   private animToken = 0;
   private onChange: ChangeListener | null = null;
+  private handFaceDown = false;
+  private allowInteraction = true;
 
   constructor(app: Application) {
     this.app = app;
@@ -190,6 +200,26 @@ export class GameBoard {
     return [...this.play];
   }
 
+  setHandFaceDown(faceDown: boolean): void {
+    this.handFaceDown = faceDown;
+    if (this.phase === 'building') this.refreshHand();
+  }
+
+  setInteractionAllowed(allowed: boolean): void {
+    this.allowInteraction = allowed;
+    this.refreshHand();
+    this.refreshPlay();
+  }
+
+  /** Programmatic build step (PvC AI). */
+  playCardById(cardId: string): boolean {
+    if (this.phase !== 'building') return false;
+    const idx = this.hand.findIndex((c) => c.id === cardId);
+    if (idx < 0) return false;
+    this.forcePlayFromHand(idx);
+    return true;
+  }
+
   clear(): void {
     this.animToken += 1;
     this.hand = [];
@@ -241,12 +271,16 @@ export class GameBoard {
     this.refreshAll();
   }
 
-  async resolve(): Promise<BoardHudSnapshot> {
+  async resolve(opts?: ResolveOptions): Promise<BoardHudSnapshot> {
     if (this.phase !== 'building' || this.play.length === 0) return this.snapshot;
     this.phase = 'resolving';
     this.emit();
     const token = ++this.animToken;
-    const dmg = resolveChainDamage(this.play, this.links);
+    const damageMode = opts?.damageMode ?? 'cards';
+    const dmg =
+      damageMode === 'hops'
+        ? hopDamageFromLinks(this.links)
+        : resolveChainDamage(this.play, this.links);
     const unbroken = chainLength(this.links);
     const breakAt = firstBreakIndex(this.links);
 
@@ -255,10 +289,10 @@ export class GameBoard {
     this.fxLayer.removeChildren();
 
     // 1) travel + one break anim → 2) points → 3) draw-on OK/BREAK verdicts
-    await this.animateChainTravel(unbroken, breakAt, token);
+    await this.animateChainTravel(unbroken, breakAt, token, opts);
     if (token !== this.animToken) return this.snapshot;
 
-    await this.hitBurst(dmg, token);
+    await this.hitBurst(dmg, damageMode, token);
     if (token !== this.animToken) return this.snapshot;
 
     this.fxLayer.removeChildren();
@@ -267,7 +301,10 @@ export class GameBoard {
 
     this.phase = 'resolved';
     const breakNote = breakAt >= 0 ? ` · broke at ${this.play[breakAt].type}→${this.play[breakAt + 1].type}` : '';
-    this.titleText.text = `Resolved · ${dmg} damage${breakNote}`;
+    this.titleText.text =
+      damageMode === 'hops'
+        ? `Resolved · ${dmg} ${dmg === 1 ? 'hop' : 'hops'}${breakNote}`
+        : `Resolved · ${dmg} damage${breakNote}`;
     this.hintText.text = breakAt >= 0 ? 'Chain stopped at the broken link' : 'Full chain connected';
     this.emit();
     return this.snapshot;
@@ -278,7 +315,7 @@ export class GameBoard {
   }
 
   private playFromHand(handIndex: number): void {
-    if (this.phase !== 'building') return;
+    if (this.phase !== 'building' || !this.allowInteraction) return;
     if (handIndex < 0 || handIndex >= this.hand.length) return;
     if (this.play.length >= MAX_SLOTS) return;
     const [card] = this.hand.splice(handIndex, 1);
@@ -288,7 +325,7 @@ export class GameBoard {
 
   /** Return this play-line card and everything after it to hand (keeps earlier order intact). */
   private returnFromPlay(playIndex: number): void {
-    if (this.phase !== 'building') return;
+    if (this.phase !== 'building' || !this.allowInteraction) return;
     if (playIndex < 0 || playIndex >= this.play.length) return;
     const removed = this.play.splice(playIndex);
     this.hand.push(...removed);
@@ -305,8 +342,10 @@ export class GameBoard {
     this.refreshHand();
     if (this.play.length === 0) {
       this.titleText.text = 'Build your chain';
-    } else {
+    } else if (!this.handFaceDown) {
       this.titleText.text = this.play.map((c) => c.type).join(' → ');
+    } else {
+      this.titleText.text = `${this.play.length} card${this.play.length === 1 ? '' : 's'} on the line`;
     }
     this.emit();
   }
@@ -401,9 +440,12 @@ export class GameBoard {
   private refreshHand(): void {
     this.handLayer.removeChildren();
     this.hand.forEach((card, i) => {
-      const node = this.makeCardNode(card, { interactive: this.phase === 'building', badge: '' });
+      const interactive = this.phase === 'building' && this.allowInteraction && !this.handFaceDown;
+      const node = this.handFaceDown
+        ? this.makeCardBackNode({ interactive: false })
+        : this.makeCardNode(card, { interactive, badge: '' });
       node.position.set(this.handX(i, this.hand.length), HAND_Y);
-      if (this.phase === 'building') {
+      if (interactive) {
         node.on('pointertap', () => this.playFromHand(i));
       }
       this.handLayer.addChild(node);
@@ -415,7 +457,7 @@ export class GameBoard {
     this.playNodes = this.play.map((card, i) => {
       const lane = this.lanes[i] ?? 0;
       const node = this.makeCardNode(card, {
-        interactive: this.phase === 'building',
+        interactive: this.phase === 'building' && this.allowInteraction,
         badge: String(i + 1),
       });
       node.position.set(SLOT_X[i], LANE_Y[lane]);
@@ -521,6 +563,46 @@ export class GameBoard {
     }
 
     return c;
+  }
+
+  private makeCardBackNode(opts: { interactive: boolean }): Container {
+    const c = new Container();
+    const body = new Graphics();
+    body.roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 10).fill({ color: 0x1a1410 });
+    body.roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 10).stroke({ color: 0xf0c36a, width: 2, alpha: 0.4 });
+    const hatch = new Graphics();
+    for (let y = -CARD_H / 2 + 12; y < CARD_H / 2 - 8; y += 14) {
+      hatch.moveTo(-CARD_W / 2 + 10, y);
+      hatch.lineTo(CARD_W / 2 - 10, y + 28);
+      hatch.stroke({ width: 1, color: 0x3a2e22, alpha: 0.55 });
+    }
+    const mark = new Text({
+      text: 'LT',
+      style: new TextStyle({
+        fontFamily: 'Bebas Neue, Impact, sans-serif',
+        fontSize: 32,
+        fill: 0x8a7a68,
+        fontWeight: '700',
+      }),
+    });
+    mark.anchor.set(0.5);
+    if (opts.interactive) {
+      c.eventMode = 'static';
+      c.cursor = 'pointer';
+      c.hitArea = new Rectangle(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H);
+    }
+    c.addChild(body, hatch, mark);
+    return c;
+  }
+
+  /** AI / PvC: play from hidden hand without requiring allowInteraction. */
+  forcePlayFromHand(handIndex: number): void {
+    if (this.phase !== 'building') return;
+    if (handIndex < 0 || handIndex >= this.hand.length) return;
+    if (this.play.length >= MAX_SLOTS) return;
+    const [card] = this.hand.splice(handIndex, 1);
+    this.play.push(card);
+    this.refreshAll();
   }
 
   private linkEndpoints(i: number): {
@@ -656,6 +738,7 @@ export class GameBoard {
     unbrokenLinks: number,
     breakAt: number,
     token: number,
+    opts?: ResolveOptions,
   ): Promise<void> {
     for (let i = 0; i < unbrokenLinks; i++) {
       if (token !== this.animToken) return;
@@ -669,6 +752,10 @@ export class GameBoard {
 
     if (breakAt >= 0) {
       await this.playBreakEffect(breakAt, token);
+      if (token === this.animToken && opts?.onRecoil) {
+        await this.recoilBurst(token);
+        await opts.onRecoil();
+      }
     } else if (this.playNodes.length === 1) {
       const node = this.playNodes[0];
       const baseY = node.y;
@@ -717,15 +804,46 @@ export class GameBoard {
     await playBreakSnap(this.attackContext(breakAt, token));
   }
 
-  private async hitBurst(damage: number, token: number): Promise<void> {
+  private async recoilBurst(token: number): Promise<void> {
+    if (token !== this.animToken) return;
+    const label = new Text({
+      text: '−1 recoil',
+      style: new TextStyle({
+        fontFamily: 'Bebas Neue, Impact, sans-serif',
+        fontSize: 36,
+        fill: 0xff6b5a,
+        fontWeight: '700',
+        dropShadow: { color: 0x000000, blur: 4, distance: 2, alpha: 0.5 },
+      }),
+    });
+    label.anchor.set(0.5);
+    label.position.set(W / 2, 120);
+    label.alpha = 0;
+    this.fxLayer.addChild(label);
+    await this.tween(320, (p) => {
+      const e = 1 - (1 - p) ** 2;
+      label.alpha = e;
+      label.y = 120 - e * 18;
+    });
+    await this.wait(220);
+    label.destroy();
+  }
+
+  private async hitBurst(damage: number, damageMode: ResolveDamageMode, token: number): Promise<void> {
     if (token !== this.animToken) return;
     const burst = new Graphics();
     this.fxLayer.addChild(burst);
+    const dmgText =
+      damageMode === 'hops'
+        ? damage === 0
+          ? '0 hops'
+          : `+${damage} hop${damage === 1 ? '' : 's'}`
+        : `+${damage}`;
     const label = new Text({
-      text: `+${damage}`,
+      text: dmgText,
       style: new TextStyle({
         fontFamily: 'Bebas Neue, Impact, sans-serif',
-        fontSize: 64,
+        fontSize: damageMode === 'hops' && damage <= 4 ? 52 : 64,
         fill: 0xf0c36a,
         dropShadow: { color: 0x000000, blur: 6, distance: 3, alpha: 0.55 },
       }),
