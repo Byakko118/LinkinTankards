@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Sans+3:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -26,35 +26,56 @@
 
       <div id="match-setup" class="match-setup">
         <p class="setup-label">Choose rival difficulty</p>
-        <div class="difficulty-row">
-          <button type="button" class="diff-btn" data-diff="easy">Easy</button>
-          <button type="button" class="diff-btn" data-diff="normal">Normal</button>
-          <button type="button" class="diff-btn" data-diff="hard">Hard</button>
+        <div class="difficulty-row" role="radiogroup" aria-label="Rival difficulty">
+          <span class="diff-thumb" aria-hidden="true"></span>
+          <button type="button" class="diff-btn" data-diff="easy" data-level="1">
+            <span class="diff-name">Easy</span>
+            <span class="pips" aria-hidden="true"><i></i><i></i><i></i></span>
+          </button>
+          <button type="button" class="diff-btn" data-diff="normal" data-level="2">
+            <span class="diff-name">Normal</span>
+            <span class="pips" aria-hidden="true"><i></i><i></i><i></i></span>
+          </button>
+          <button type="button" class="diff-btn" data-diff="hard" data-level="3">
+            <span class="diff-name">Hard</span>
+            <span class="pips" aria-hidden="true"><i></i><i></i><i></i></span>
+          </button>
         </div>
+        <p id="diff-blurb" class="diff-blurb">&nbsp;</p>
         <button type="button" id="btn-start" class="primary">Start match</button>
       </div>
 
       <div id="match-live" class="match-live hidden">
         <div class="hp-bar">
-          <div class="fighter you">
+          <div id="fighter-player" class="fighter you">
             <span class="who">You</span>
             <span id="hp-player" class="hp">20</span>
+            <div class="hp-track" aria-hidden="true"><div class="hp-ghost"></div><div class="hp-fill"></div></div>
+            <div class="hp-pops" aria-hidden="true"></div>
           </div>
           <div class="round-pill">
             <span class="label">Round</span>
             <span id="round-value">1</span>
           </div>
-          <div class="fighter cpu">
-            <span class="who">CPU</span>
+          <div id="fighter-cpu" class="fighter cpu">
+            <span class="who">CPU <em id="cpu-diff">Normal</em></span>
             <span id="hp-cpu" class="hp">20</span>
+            <div class="hp-track" aria-hidden="true"><div class="hp-ghost"></div><div class="hp-fill"></div></div>
+            <div class="hp-pops" aria-hidden="true"></div>
           </div>
         </div>
         <p id="turn-banner" class="turn-banner">Your attack</p>
         <div id="board-host"></div>
         <aside class="hud">
-          <div class="stat">
+          <div class="stat wide phase-stat">
             <span class="label">Phase</span>
-            <span id="phase-value">—</span>
+            <div id="phase-track" class="phase-track" role="list">
+              <div class="phase-thumb" aria-hidden="true"></div>
+              <div class="phase-step" role="listitem" data-step="deal">Deal</div>
+              <div class="phase-step" role="listitem" data-step="build">Build</div>
+              <div class="phase-step" role="listitem" data-step="resolve">Resolve</div>
+              <div class="phase-step" role="listitem" data-step="score">Score</div>
+            </div>
           </div>
           <div class="stat wide">
             <span class="label">Line</span>
