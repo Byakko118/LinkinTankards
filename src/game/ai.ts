@@ -1,11 +1,5 @@
-import {
-  CardDef,
-  CardType,
-  canConnect,
-  chainLength,
-  evaluateLinks,
-  isLaneChanger,
-} from './rules';
+import { CardDef, CardType, canConnect, evaluateLinks, isLaneChanger } from './rules';
+import { MAX_LINE, hopDamageFromLinks } from './hopDamage';
 import { SeededRng } from './rng';
 
 export type AiDifficulty = 'easy' | 'normal' | 'hard';
@@ -16,6 +10,13 @@ export const SLIP_RATE: Record<AiDifficulty, number> = {
   hard: 0.05,
 };
 
+/** Share of turns the CPU ignores Streak and plays a random longest legal line instead. */
+export const STREAK_MISS_RATE: Record<AiDifficulty, number> = {
+  easy: 0.5,
+  normal: 0.25,
+  hard: 0.1,
+};
+
 type SlipStyle = 'greedy_tail' | 'cross_keeper' | 'double_changer';
 
 const STYLE_WEIGHTS: Record<SlipStyle, number> = {
@@ -24,20 +25,29 @@ const STYLE_WEIGHTS: Record<SlipStyle, number> = {
   double_changer: 1,
 };
 
-function permutations<T>(items: T[]): T[][] {
-  if (items.length <= 1) return [items];
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i++) {
-    const rest = [...items.slice(0, i), ...items.slice(i + 1)];
-    for (const p of permutations(rest)) {
-      out.push([items[i], ...p]);
+/** Every fully legal line of 1–MAX_LINE cards (a hand of 6 yields a few hundred). */
+function legalLines(hand: readonly CardDef[]): CardDef[][] {
+  const out: CardDef[][] = [];
+  const line: CardDef[] = [];
+  const used = new Set<string>();
+  const extend = (): void => {
+    for (const card of hand) {
+      if (used.has(card.id)) continue;
+      if (line.length > 0 && !canConnect(line[line.length - 1].type, card.type)) continue;
+      line.push(card);
+      used.add(card.id);
+      out.push([...line]);
+      if (line.length < MAX_LINE) extend();
+      line.pop();
+      used.delete(card.id);
     }
-  }
+  };
+  extend();
   return out;
 }
 
-function scoreLine(line: CardDef[]): number {
-  return chainLength(evaluateLinks(line));
+function lineDamage(line: CardDef[]): number {
+  return hopDamageFromLinks(evaluateLinks(line));
 }
 
 function tieBreak(a: CardDef[], b: CardDef[]): boolean {
@@ -46,21 +56,26 @@ function tieBreak(a: CardDef[], b: CardDef[]): boolean {
   return changers(a) > changers(b);
 }
 
+/** Highest H + B among legal lines; unbroken lines always beat a break (which also costs recoil). */
 export function bestLine(hand: CardDef[]): CardDef[] {
   let best: CardDef[] = [];
   let bestScore = -1;
-  const n = hand.length;
-  for (let mask = 1; mask < 1 << n; mask++) {
-    const subset = hand.filter((_, i) => mask & (1 << i));
-    for (const perm of permutations(subset)) {
-      const s = scoreLine(perm);
-      if (s > bestScore || (s === bestScore && tieBreak(perm, best))) {
-        bestScore = s;
-        best = perm;
-      }
+  for (const line of legalLines(hand)) {
+    const s = lineDamage(line);
+    if (s > bestScore || (s === bestScore && tieBreak(line, best))) {
+      bestScore = s;
+      best = line;
     }
   }
   return best;
+}
+
+/** Streak miss: lane-correct but combo-blind, so a random longest legal line. */
+function longestLegalLine(hand: CardDef[], rng: SeededRng): CardDef[] {
+  const lines = legalLines(hand);
+  const longest = lines.reduce((n, l) => Math.max(n, l.length), 0);
+  const pool = lines.filter((l) => l.length === longest);
+  return pool[rng.nextInt(pool.length)] ?? [];
 }
 
 function firstBreakAt(line: CardDef[]): number {
@@ -92,6 +107,7 @@ function illegalCrossKeeper(from: CardType, hand: CardDef[]): CardType | null {
 }
 
 function applyGreedyTail(best: CardDef[], hand: CardDef[]): CardDef[] | null {
+  if (best.length >= MAX_LINE) return null;
   const used = new Set(best.map((c) => c.id));
   const extras = hand.filter((c) => !used.has(c.id));
   for (const extra of extras) {
@@ -133,7 +149,8 @@ function applyDoubleChanger(best: CardDef[], hand: CardDef[]): CardDef[] | null 
 }
 
 export function planAiLine(hand: CardDef[], difficulty: AiDifficulty, rng: SeededRng): CardDef[] {
-  const perfect = bestLine(hand);
+  const missesStreak = rng.next() < STREAK_MISS_RATE[difficulty];
+  const perfect = missesStreak ? longestLegalLine(hand, rng) : bestLine(hand);
   if (perfect.length === 0) return perfect;
 
   const rate = SLIP_RATE[difficulty];

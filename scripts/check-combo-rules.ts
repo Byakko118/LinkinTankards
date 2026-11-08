@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import { comboDamageFromLinks } from '../src/game/hopDamage';
+import { bestLine, planAiLine } from '../src/game/ai';
+import { CardDef, CardType, evaluateLinks, makeCard } from '../src/game/rules';
+import { SeededRng } from '../src/game/rng';
+import { HAND_SIZE, TavernPile, buildTavernDeck } from '../src/game/tavernDeck';
+
+const line = (types: string): CardDef[] => [...types].map((t) => makeCard(t as CardType));
+const dmg = (types: string) => comboDamageFromLinks(evaluateLinks(line(types)));
+
+// Damage table (docs/deck-combo-balance.md): H + B, hops before a break count.
+assert.deepEqual(dmg('G'), { hops: 0, streak: 0, total: 0 });
+assert.equal(dmg('GGKAA').total, 4);
+assert.deepEqual(dmg('GGGKA'), { hops: 4, streak: 1, total: 5 });
+assert.deepEqual(dmg('GKSKA'), { hops: 4, streak: 1, total: 5 });
+assert.deepEqual(dmg('GKSKS'), { hops: 4, streak: 2, total: 6 });
+assert.equal(dmg('SKSKS').total, 7);
+assert.equal(dmg('GGGGG').total, 7);
+assert.equal(dmg('AAAAA').total, 7);
+assert.deepEqual(dmg('SKSKG'), { hops: 3, streak: 2, total: 5 });
+assert.deepEqual(dmg('GAAA'), { hops: 0, streak: 0, total: 0 });
+
+// Deck and hand.
+const deck = buildTavernDeck();
+assert.equal(deck.length, 20);
+for (const t of ['G', 'A', 'S', 'K']) assert.equal(deck.filter((c) => c.type === t).length, 5);
+assert.equal(HAND_SIZE, 6);
+
+// Draw pile: 3 hands, then a 2-card remainder is drawn before the reshuffle; no card is lost or duplicated.
+const pile = new TavernPile(new SeededRng(7));
+for (let turn = 0; turn < 40; turn++) {
+  const hand = pile.drawHand();
+  assert.equal(hand.length, 6);
+  assert.equal(new Set(hand.map((c) => c.id)).size, 6);
+  assert.equal(pile.drawCount + pile.discardCount + 6, 20, `turn ${turn}: cards conserved`);
+  pile.discardCards(hand);
+}
+
+// AI expert line is legal, <= 5 cards, and maximises H + B.
+const rng = new SeededRng(11);
+for (let i = 0; i < 300; i++) {
+  const hand = new TavernPile(rng.fork(i)).drawHand();
+  const best = bestLine(hand);
+  const links = evaluateLinks(best);
+  assert.ok(best.length >= 1 && best.length <= 5);
+  assert.ok(links.every((l) => l.valid));
+  const planned = planAiLine(hand, 'hard', rng);
+  assert.ok(planned.length >= 1 && planned.length <= 5);
+}
+
+console.log('combo rules ok');
