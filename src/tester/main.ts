@@ -25,6 +25,7 @@ const RIGHT_X = 305;
 const galleryEl = document.getElementById('gallery');
 const speedEl = document.getElementById('speed') as HTMLSelectElement | null;
 const freezeEl = document.getElementById('freeze') as HTMLInputElement | null;
+const streakEl = document.getElementById('streak') as HTMLSelectElement | null;
 const playAllEl = document.getElementById('play-all') as HTMLButtonElement | null;
 if (!galleryEl) throw new Error('Missing #gallery');
 
@@ -37,6 +38,7 @@ if (speedEl && speedParam) {
   speedEl.value = speedParam;
 }
 if (freezeEl && params.has('freeze')) freezeEl.checked = true;
+if (streakEl && params.has('streak')) streakEl.value = params.get('streak') ?? '0';
 
 const FREEZE_MS = Number(params.get('freeze')) || 20;
 
@@ -240,6 +242,7 @@ async function playPanel(rt: PanelRuntime): Promise<void> {
     fxLayer: rt.fxLayer,
     groundY: GROUND_Y,
     airY: AIR_Y,
+    streak: Number(streakEl?.value ?? 0) || 0,
     aborted: () => token !== rt.token,
     nudgeBoard: (dx: number, dy: number) => {
       if (token === rt.token) rt.root.position.set(dx, dy);

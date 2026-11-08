@@ -21,16 +21,27 @@ function hopKind(from: CardType, to: CardType): HopKind {
   return 'other';
 }
 
-/** PvC combat: H + B over the unbroken prefix. Hops before a break still count, with their streaks. */
-export function comboDamageFromLinks(links: readonly LinkInfo[]): ComboDamage {
+/**
+ * Per link: 0 when the hop pays no Streak (or never lands), else its ordinal among the line's
+ * streak hops (1st, 2nd, 3rd). Only the unbroken prefix can score.
+ */
+export function streakSteps(links: readonly LinkInfo[]): number[] {
   const hops = chainLength(links);
-  let streak = 0;
+  const steps = links.map(() => 0);
+  let n = 0;
   let prev: HopKind = 'other';
   for (let i = 0; i < hops; i++) {
     const kind = hopKind(links[i].from, links[i].to);
-    if (kind !== 'other' && kind === prev) streak += 1;
+    if (kind !== 'other' && kind === prev) steps[i] = ++n;
     prev = kind;
   }
+  return steps;
+}
+
+/** PvC combat: H + B over the unbroken prefix. Hops before a break still count, with their streaks. */
+export function comboDamageFromLinks(links: readonly LinkInfo[]): ComboDamage {
+  const hops = chainLength(links);
+  const streak = streakSteps(links).filter((s) => s > 0).length;
   return { hops, streak, total: hops + streak };
 }
 

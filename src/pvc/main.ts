@@ -373,6 +373,6 @@ btnFast.addEventListener('click', () => {
   btnFast.textContent = 'Fast-forwarding ››';
 });
 
-board = await GameBoard.create(boardHost);
+board = await GameBoard.create(boardHost, { cardDamage: false });
 board.setChangeListener(() => paintHud());
 paintHud();
