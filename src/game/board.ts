@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Rectangle, Text, TextStyle, Ticker } 
 import { AttackContext, hopIdFor, playBreakSnap, playHopAttack } from './attacks';
 import {
   CardDef,
+  CardType,
   Lane,
   LinkInfo,
   TYPE_COLORS,
@@ -14,7 +15,8 @@ import {
   laneAfter,
   resolveChainDamage,
 } from './rules';
-import { MAX_LINE, comboDamageFromLinks } from './hopDamage';
+import { MAX_LINE, comboDamageFromLinks, streakSteps } from './hopDamage';
+import { HAND_SIZE } from './tavernDeck';
 
 const W = 960;
 const H = 640;
@@ -38,8 +40,16 @@ const INK_OK = 0x63c98f;
 const INK_BREAK = 0xf05a45;
 const INK_NOTE = 0xf3c7b8;
 const INK_SHADOW = 0x0b0705;
+const INK_STREAK = 0xf5c84c;
 const GOLD = 0xf0c36a;
 const DIM_TINT = 0x958a7f;
+
+const LANE_PATH: Record<CardType, string> = {
+  G: 'ground → ground',
+  K: 'ground → air',
+  A: 'air → air',
+  S: 'air → ground',
+};
 
 export type BoardPhase = 'empty' | 'building' | 'resolving' | 'resolved';
 
@@ -48,6 +58,11 @@ export type ResolveDamageMode = 'cards' | 'hops';
 export interface ResolveOptions {
   damageMode?: ResolveDamageMode;
   onRecoil?: () => void | Promise<void>;
+}
+
+export interface BoardOptions {
+  /** Printed per-card damage (solo loop). PvC scores hops, so its faces show the lane path instead. */
+  cardDamage?: boolean;
 }
 
 export interface BoardHudSnapshot {
@@ -251,6 +266,9 @@ export class GameBoard {
   private play: CardDef[] = [];
   private lanes: Lane[] = [];
   private links: LinkInfo[] = [];
+  /** Per link streak ordinal for the current resolve (all 0 outside hop scoring). */
+  private streaks: number[] = [];
+  private scoring: ResolveDamageMode = 'cards';
   private phase: BoardPhase = 'empty';
   private playNodes: Container[] = [];
   private animToken = 0;
@@ -263,6 +281,10 @@ export class GameBoard {
   private placeQueueUntil = 0;
   private slotFrames: Graphics[] = [];
   private slotNums: Text[] = [];
+  private pipG = new Graphics();
+  private pips: { fill: number; pop: number }[] = [];
+  private handFullCued = false;
+  private readonly cardDamage: boolean;
   private chromeFx: { t: number; fn: ChromeFx }[] = [];
   private clock = 0;
   private titlePop = 1;
@@ -281,8 +303,9 @@ export class GameBoard {
     shake: number;
   };
 
-  constructor(app: Application) {
+  constructor(app: Application, opts: BoardOptions = {}) {
     this.app = app;
+    this.cardDamage = opts.cardDamage ?? true;
     app.stage.addChild(this.root);
     this.shadowLayer.addChild(this.chromeG);
     this.root.addChild(
@@ -340,7 +363,7 @@ export class GameBoard {
     app.ticker.add(this.tick);
   }
 
-  static async create(host: HTMLElement): Promise<GameBoard> {
+  static async create(host: HTMLElement, opts: BoardOptions = {}): Promise<GameBoard> {
     const app = new Application();
     await app.init({
       width: W,
@@ -360,7 +383,7 @@ export class GameBoard {
       new Promise((r) => setTimeout(r, 1500)),
     ]);
     host.replaceChildren(app.canvas);
-    return new GameBoard(app);
+    return new GameBoard(app, opts);
   }
 
   setChangeListener(fn: ChangeListener | null): void {
@@ -402,7 +425,8 @@ export class GameBoard {
     const valid = this.links.filter((l) => l.valid).length;
     const breakAt = firstBreakIndex(this.links);
     const prefix = chainLength(this.links);
-    const dmg = resolveChainDamage(this.play, this.links);
+    const dmg =
+      this.scoring === 'hops' ? comboDamageFromLinks(this.links).total : resolveChainDamage(this.play, this.links);
     const linksLabel =
       this.links.length === 0
         ? 'single card'
@@ -512,8 +536,10 @@ export class GameBoard {
     this.emit();
     const token = ++this.animToken;
     const damageMode = opts?.damageMode ?? 'cards';
+    this.scoring = damageMode;
     const combo = comboDamageFromLinks(this.links);
     const dmg = damageMode === 'hops' ? combo.total : resolveChainDamage(this.play, this.links);
+    this.streaks = damageMode === 'hops' ? streakSteps(this.links) : this.links.map(() => 0);
     const unbroken = chainLength(this.links);
     const breakAt = firstBreakIndex(this.links);
 
@@ -532,7 +558,9 @@ export class GameBoard {
     if (token !== this.animToken) return this.snapshot;
 
     await this.wait(150);
-    await this.drawVerdictLinks(breakAt, token);
+    const stamps = await this.drawVerdictLinks(breakAt, token);
+    if (token !== this.animToken) return this.snapshot;
+    await this.streakTally(stamps, token);
     if (token !== this.animToken) return this.snapshot;
 
     await this.scoreStamp(dmg, damageMode, token);
@@ -561,7 +589,9 @@ export class GameBoard {
     this.lanes = [];
     this.links = [];
     this.playNodes = [];
+    this.streaks = [];
     this.phase = 'empty';
+    this.handFullCued = false;
     this.hideCombo();
   }
 
@@ -607,7 +637,7 @@ export class GameBoard {
 
   private handPose(i: number, n: number): Pose {
     const o = i - (n - 1) / 2;
-    return rest(this.handX(i, n), HAND_Y + o * o * 2.4, o * 0.035);
+    return rest(this.handX(i, n), HAND_Y + o * o * 1.9, o * 0.032);
   }
 
   private playPose(i: number): Pose {
@@ -615,7 +645,7 @@ export class GameBoard {
   }
 
   private handX(index: number, count: number): number {
-    const spread = Math.min(170, 700 / Math.max(count, 1));
+    const spread = Math.min(150, 760 / Math.max(count, 1));
     const total = spread * (count - 1);
     const start = W / 2 - total / 2;
     return start + index * spread;
@@ -656,7 +686,7 @@ export class GameBoard {
       let delay = 0;
       if (prevZone === null) {
         kind = 'deal';
-        delay = dealN++ * 80;
+        delay = dealN++ * 70;
       } else if (prevZone === 'hand' && zone === 'play') {
         kind = 'place';
         delay = Math.max(0, this.placeQueueUntil - now);
@@ -897,6 +927,7 @@ export class GameBoard {
     for (const v of this.views.values()) this.stepView(v, dt, v === hovered);
     for (const v of this.leaving) this.stepView(v, dt, false);
     this.stepSlots(dt);
+    this.stepHandPips(dt);
     this.stepChromeFx(dt);
     this.stepTitle(dt);
     this.stepCombo(dt);
@@ -1046,7 +1077,52 @@ export class GameBoard {
       }),
     });
     label.position.set(48, HAND_Y - CARD_H / 2 - 14);
-    this.laneLayer.addChild(g, label);
+    this.pipG.position.set(48 + label.width + 14, HAND_Y - CARD_H / 2 - 14 + label.height / 2);
+    this.pips = Array.from({ length: HAND_SIZE }, () => ({ fill: 0, pop: 0 }));
+    this.laneLayer.addChild(g, label, this.pipG);
+  }
+
+  /** Hand-size pips beside the rail label: each fills as its card lands, drains as cards go to the line. */
+  private stepHandPips(dt: number): void {
+    let landed = 0;
+    for (const card of this.hand) {
+      const m = this.views.get(card.id)?.motion;
+      if (!m || m.kind !== 'deal' || m.landed || m.t - m.delay >= m.prof.dur * 0.75) landed += 1;
+    }
+    const k = 1 - Math.exp(-dt / 70);
+    const g = this.pipG;
+    g.clear();
+    this.pips.forEach((pip, i) => {
+      const want = i < landed ? 1 : 0;
+      if (want === 1 && pip.fill < 0.5 && pip.fill + (want - pip.fill) * k >= 0.5) pip.pop = 1;
+      pip.fill += (want - pip.fill) * k;
+      pip.pop = Math.max(0, pip.pop - dt / 220);
+      const x = i * 13;
+      const r = 3.6 * (1 + 0.55 * Math.sin(Math.PI * pip.pop));
+      g.circle(x, 0, 4.2).stroke({ color: GOLD, width: 1.2, alpha: 0.35 + 0.2 * pip.fill });
+      if (pip.fill > 0.02) g.circle(x, 0, r * pip.fill).fill({ color: GOLD, alpha: 0.85 * pip.fill });
+    });
+    const full = this.hand.length >= HAND_SIZE && landed >= HAND_SIZE;
+    if (full && !this.handFullCued && this.phase === 'building') {
+      this.handFullCued = true;
+      this.handFullGlint();
+    }
+  }
+
+  /** Full hand: a gold glint runs along the rail's top edge, left to right. */
+  private handFullGlint(): void {
+    const x0 = 36;
+    const x1 = W - 36;
+    const y = HAND_Y - CARD_H / 2 - 20;
+    this.addChromeFx((t, g) => {
+      const life = 420;
+      if (t >= life) return false;
+      const k = t / life;
+      const head = lerp(x0, x1, ease.outCubic(k));
+      const tail = lerp(x0, x1, ease.outCubic(Math.max(0, k - 0.22)));
+      g.moveTo(tail, y).lineTo(head, y).stroke({ color: GOLD, width: 2.5, alpha: 0.8 * (1 - k * k), cap: 'round' });
+      return true;
+    });
   }
 
   private drawEmptySlots(): void {
@@ -1156,10 +1232,10 @@ export class GameBoard {
     name.position.set(0, 8);
 
     const dmg = new Text({
-      text: `${card.damage} dmg`,
+      text: this.cardDamage ? `${card.damage} dmg` : LANE_PATH[card.type],
       style: new TextStyle({
         fontFamily: 'Source Sans 3, sans-serif',
-        fontSize: 15,
+        fontSize: this.cardDamage ? 15 : 12,
         fill: 0xc9b896,
         fontWeight: '600',
       }),
@@ -1309,6 +1385,7 @@ export class GameBoard {
       fxLayer: this.fxLayer,
       groundY: LANE_Y[0],
       airY: LANE_Y[1],
+      streak: isBreak ? 0 : (this.streaks[linkIndex] ?? 0),
       aborted: () => token !== this.animToken,
       nudgeBoard: (dx: number, dy: number) => {
         this.root.position.set(dx, dy);
@@ -1595,6 +1672,47 @@ export class GameBoard {
     return word;
   }
 
+  /** Streak seal pressed onto the middle of an OK link: the pen rings it, then "+1" thumps in. Bigger per step. */
+  private async inkStreakSeal(at: Vec, step: number): Promise<Container> {
+    const r = 13 + 2.5 * step;
+    const seal = new Container();
+    seal.position.set(at.x, at.y);
+    seal.rotation = rand(-0.22, -0.08);
+    const g = new Graphics();
+    const t = new Text({
+      text: '+1',
+      style: {
+        fontFamily: MARKER,
+        fontSize: 14 + 2.5 * step,
+        fill: INK_STREAK,
+        stroke: { color: INK_SHADOW, width: 3, join: 'round' },
+        padding: 6,
+      },
+      resolution: 2,
+    });
+    t.anchor.set(0.5);
+    t.position.set(-1, 1);
+    t.alpha = 0;
+    seal.addChild(g, t);
+    this.inkLayer.addChild(seal);
+    const a0 = -Math.PI * 0.6;
+    await this.tween(150, (p) => {
+      const e = ease.inOutQuad(p);
+      g.clear();
+      g.circle(1.5, 2.5, r + 1).fill({ color: INK_SHADOW, alpha: 0.55 * e });
+      g.circle(0, 0, r).fill({ color: INK_SHADOW, alpha: 0.88 * e });
+      if (e > 0.01) {
+        g.moveTo(Math.cos(a0) * (r - 1), Math.sin(a0) * (r - 1))
+          .arc(0, 0, r - 1, a0, a0 + Math.PI * 2.15 * e).stroke({ color: INK_STREAK, width: 3, alpha: 0.95, cap: 'round' });
+      }
+    });
+    await this.tween(120, (p) => {
+      t.alpha = Math.min(1, p * 2.5);
+      t.scale.set(lerp(1.7, 1, ease.outBack(p)));
+    });
+    return seal;
+  }
+
   /** Two fast slashes crossing at the dead link. */
   private async inkCross(at: Vec): Promise<void> {
     const g = new Graphics();
@@ -1666,15 +1784,16 @@ export class GameBoard {
    * GM pen: each verdict is drawn along the chain in order — OK strokes run edge to edge, the BREAK
    * stroke dies at the gap under an X with the lane mismatch noted. Later links stay ghosted.
    */
-  private async drawVerdictLinks(breakAt: number, token: number): Promise<void> {
+  private async drawVerdictLinks(breakAt: number, token: number): Promise<Container[]> {
     this.inkLayer.removeChildren();
-    if (this.links.length === 0) return;
+    const stamps: Promise<Container>[] = [];
+    if (this.links.length === 0) return [];
 
     const lastReveal = breakAt >= 0 ? breakAt : this.links.length - 1;
     const words: Promise<unknown>[] = [];
 
     for (let i = 0; i <= lastReveal; i++) {
-      if (token !== this.animToken) return;
+      if (token !== this.animToken) return [];
       const link = this.links[i];
       const ep = this.inkPath(i);
       if (!ep) continue;
@@ -1682,24 +1801,32 @@ export class GameBoard {
 
       if (breakAt === i || !link.valid) {
         await this.inkStroke(ep, 0.5, 110, INK_BREAK, false);
-        if (token !== this.animToken) return;
+        if (token !== this.animToken) return [];
         await this.inkCross(mid);
         this.inkNudge(mid);
         await this.inkWord('BREAK', { x: mid.x, y: mid.y - 34 }, INK_BREAK, 22, 150);
-        if (token !== this.animToken) return;
+        if (token !== this.animToken) return [];
         await this.inkMismatch(link, { x: mid.x, y: mid.y + 30 });
         break;
       }
 
       await this.inkStroke(ep, 1, 150, INK_OK, true);
-      if (token !== this.animToken) return;
+      if (token !== this.animToken) return [];
       const d = quadTangent(ep.p0, ep.c, ep.p1, 0.5);
       const up = d.x >= 0 ? { x: d.y, y: -d.x } : { x: -d.y, y: d.x };
-      const off = 20 + 8 * Math.abs(up.x);
+      const step = this.streaks[i] ?? 0;
+      const flat = Math.abs(ep.p1.y - ep.p0.y) < 1;
+      // A streak link shares its narrow gap with its seal: on a flat link OK lifts clear of the seal on the
+      // stroke; on a lane change OK slides to the stroke's upper end and the seal to the lower half.
+      const off = 20 + 8 * Math.abs(up.x) + (step > 0 && flat ? 14 + 2.5 * step : 0);
+      const okS = !step || flat ? 0.5 : ep.p1.y < ep.p0.y ? 0.76 : 0.24;
+      const okAt = inkAt(ep, okS);
       // The next stroke starts while this OK is still being written.
-      words.push(this.inkWord('OK', { x: mid.x + up.x * off, y: mid.y + up.y * off }, INK_OK, 19, 100));
+      words.push(this.inkWord('OK', { x: okAt.x + up.x * off, y: okAt.y + up.y * off }, INK_OK, 19, 100));
+      if (step > 0) stamps.push(this.inkStreakSeal(inkAt(ep, flat ? 0.5 : okS > 0.5 ? 0.38 : 0.62), step));
     }
     await Promise.all(words);
+    const written = await Promise.all(stamps);
 
     if (breakAt >= 0) {
       const ghost = new Graphics();
@@ -1717,6 +1844,70 @@ export class GameBoard {
       this.inkLayer.addChildAt(ghost, 0);
       await this.tween(200, (p) => (ghost.alpha = 0.6 * p));
     }
+    return written;
+  }
+
+  /**
+   * Streak payout after the verdict ink: each "+1" stamp thumps in chain order and a copy flies
+   * into the hop counter, which ticks hops → total damage before the score stamp.
+   */
+  private async streakTally(stamps: Container[], token: number): Promise<void> {
+    const c = this.combo;
+    if (!stamps.length || !c.node.visible) return;
+    await this.wait(120);
+    for (let i = 0; i < stamps.length; i++) {
+      if (token !== this.animToken) return;
+      const stamp = stamps[i];
+      const base = stamp.scale.x;
+      void this.tween(160, (p) => stamp.scale.set(base * (1 + 0.3 * Math.sin(Math.PI * p))));
+      const fly = new Text({
+        text: '+1',
+        style: {
+          fontFamily: MARKER,
+          fontSize: 22,
+          fill: INK_STREAK,
+          stroke: { color: INK_SHADOW, width: 4, join: 'round' },
+          padding: 8,
+        },
+        resolution: 2,
+      });
+      fly.anchor.set(0.5);
+      this.hudLayer.addChild(fly);
+      const from = { x: stamp.x, y: stamp.y };
+      const to = { x: c.node.x, y: c.node.y };
+      const ctrl = { x: lerp(from.x, to.x, 0.35), y: Math.min(from.y, to.y) - 70 };
+      await this.tween(230, (p) => {
+        const e = ease.inOutCubic(p);
+        const q = quad(from, ctrl, to, e);
+        fly.position.set(q.x, q.y);
+        fly.rotation = -0.3 * Math.sin(Math.PI * e);
+        fly.scale.set(lerp(1, 0.7, e));
+        fly.alpha = p > 0.85 ? 1 - (p - 0.85) / 0.15 : 1;
+      });
+      fly.destroy();
+      if (token !== this.animToken) return;
+      c.count += 1;
+      c.num.text = String(c.count);
+      c.flash.text = c.num.text;
+      c.num.tint = 0xffffff;
+      c.label.text = 'DAMAGE';
+      c.punch = 1;
+      this.streakBurst(to);
+      await this.wait(70);
+    }
+    await this.wait(200);
+  }
+
+  /** Small gold burst behind the counter when a streak point lands. */
+  private streakBurst(at: Vec): void {
+    this.addChromeFx((t, g) => {
+      const life = 260;
+      if (t >= life) return false;
+      const k = t / life;
+      const e = ease.outCubic(k);
+      g.circle(at.x, at.y, 18 + 34 * e).stroke({ color: INK_STREAK, width: 3 * (1 - k) + 0.5, alpha: 0.9 * (1 - k) });
+      return true;
+    });
   }
 
   /** The GM taps the table on the X: the two cards of the dead link flinch apart. */

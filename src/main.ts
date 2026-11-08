@@ -23,6 +23,8 @@ const linksEl = linksNode;
 
 const params = new URLSearchParams(window.location.search);
 const demoMode = params.has('demo');
+// ?score=hops scores like PvC (1 per hop + Streak) instead of printed card damage; streak demos imply it.
+const hopScoring = params.get('score') === 'hops' || (params.get('demo') ?? '').startsWith('streak');
 
 // Tuning/capture hooks: ?slow=0.25 slow-mo; ?freeze=20 holds a hop 20 ms after contact
 // (&freezeSkip=2 lets the first two hops play through and freezes the third).
@@ -54,6 +56,16 @@ function demoKeepsTypes(): CardType[] {
 /** Lane ping-pong: launch, meteor down, spring back up, air keep (G→K→S→K→A). */
 function demoReboundTypes(): CardType[] {
   return ['G', 'K', 'S', 'K', 'A'];
+}
+
+/** Full juggle: three streak hops in a row (4 hops + 3 streak = 7). */
+function demoStreakTypes(): CardType[] {
+  return ['S', 'K', 'S', 'K', 'S'];
+}
+
+/** Ground press run into a launch: one streak hop (G→G→G), then K→A. */
+function demoStreakPressTypes(): CardType[] {
+  return ['G', 'G', 'G', 'K', 'A'];
 }
 
 let board: GameBoard;
@@ -116,7 +128,7 @@ async function resolve(): Promise<void> {
   if (busy || board.snapshot.phase !== 'building' || board.snapshot.playCount < 1) return;
   busy = true;
   paintHud();
-  await board.resolve();
+  await board.resolve(hopScoring ? { damageMode: 'hops' } : undefined);
   busy = false;
   paintHud();
 }
@@ -140,7 +152,7 @@ btnClear.addEventListener('click', () => clearPlay());
 btnResolve.addEventListener('click', () => void resolve());
 btnNext.addEventListener('click', () => void nextTurn());
 
-board = await GameBoard.create(host);
+board = await GameBoard.create(host, { cardDamage: !hopScoring });
 board.setChangeListener(() => paintHud());
 paintHud();
 
@@ -156,7 +168,11 @@ if (demoMode) {
           ? demoKeepsTypes()
           : mode === 'rebound'
             ? demoReboundTypes()
-            : demoPlayTypes();
+            : mode === 'streak'
+              ? demoStreakTypes()
+              : mode === 'streak-press'
+                ? demoStreakPressTypes()
+                : demoPlayTypes();
   const cards = types.map((t) => makeCard(t));
   if (handOnly) {
     // Hand strip filled, play line empty — for build-UI screenshots.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { comboDamageFromLinks } from '../src/game/hopDamage';
+import { comboDamageFromLinks, streakSteps } from '../src/game/hopDamage';
 import { bestLine, planAiLine } from '../src/game/ai';
 import { CardDef, CardType, evaluateLinks, makeCard } from '../src/game/rules';
 import { SeededRng } from '../src/game/rng';
@@ -19,6 +19,13 @@ assert.equal(dmg('GGGGG').total, 7);
 assert.equal(dmg('AAAAA').total, 7);
 assert.deepEqual(dmg('SKSKG'), { hops: 3, streak: 2, total: 5 });
 assert.deepEqual(dmg('GAAA'), { hops: 0, streak: 0, total: 0 });
+
+// Streak ordinals per link (drive the escalating hit-stop and the "+1" seals).
+const steps = (types: string) => streakSteps(evaluateLinks(line(types)));
+assert.deepEqual(steps('SKSKS'), [0, 1, 2, 3]);
+assert.deepEqual(steps('GGGKA'), [0, 1, 0, 0]);
+assert.deepEqual(steps('GGKAA'), [0, 0, 0, 0]);
+assert.deepEqual(steps('SKSKG'), [0, 1, 2, 0]);
 
 // Deck and hand.
 const deck = buildTavernDeck();

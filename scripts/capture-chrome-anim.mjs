@@ -52,10 +52,10 @@ async function tapBoard(page, x, y) {
 }
 
 const handX = (i, n) => {
-  const spread = Math.min(170, 700 / n);
+  const spread = Math.min(150, 760 / n);
   return 480 - (spread * (n - 1)) / 2 + i * spread;
 };
-const handY = (i, n) => 545 + (i - (n - 1) / 2) ** 2 * 2.4;
+const handY = (i, n) => 545 + (i - (n - 1) / 2) ** 2 * 1.9;
 
 async function lineCount(page) {
   const t = await page.locator('#links-value').textContent();
@@ -91,20 +91,20 @@ const shots = {
     await step(page, 900);
     await shoot(page, 'ui-match-start.png', '#pvc-app');
 
-    const hp = await canvasPoint(page, handX(1, 5), handY(1, 5));
+    const hp = await canvasPoint(page, handX(1, 6), handY(1, 6));
     await page.mouse.move(hp.x, hp.y);
     await step(page, 300);
     await shoot(page, 'hand-hover.png');
 
-    await tapBoard(page, handX(0, 5), handY(0, 5));
+    await tapBoard(page, handX(0, 6), handY(0, 6));
     await step(page, 140);
     await shoot(page, 'place-midflight.png');
     await step(page, 190);
     await shoot(page, 'place-landing.png');
     await step(page, 500);
-    await tapBoard(page, handX(0, 4), handY(0, 4));
+    await tapBoard(page, handX(0, 5), handY(0, 5));
     await step(page, 700);
-    await tapBoard(page, handX(0, 3), handY(0, 3));
+    await tapBoard(page, handX(0, 4), handY(0, 4));
     await step(page, 700);
     await page.mouse.move(5, 5);
     await step(page, 200);
@@ -123,7 +123,7 @@ const shots = {
     await boot(page, `${BASE}/pvc.html`);
     await page.locator('#btn-start').click();
     await step(page, 1400);
-    for (let n = 5; n > 1; n--) {
+    for (let n = 6; n > 2; n--) {
       await tapBoard(page, handX(0, n), handY(0, n));
       await step(page, 600);
     }

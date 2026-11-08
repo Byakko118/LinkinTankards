@@ -59,6 +59,8 @@ export interface AttackContext {
   nudgeBoard: (dx: number, dy: number) => void;
   /** Fires on the contact frame (hop impact or break snap), before any impact FX spawn. */
   onContact?: () => void;
+  /** Streak ordinal of this hop (0 = none, 1–3 = 1st–3rd streak hop in the line). */
+  streak?: number;
 }
 
 // ——— Tuning hooks (tester A/B, capture scripts) ———
@@ -108,6 +110,10 @@ interface Hit {
 }
 
 const WHITE = 0xffffff;
+
+/** Streak weight ladder, indexed by streak ordinal: extra hit-stop (ms) and contact weight. */
+const STREAK_STOP_MS = [0, 18, 42, 72];
+const STREAK_WEIGHT = [0, 0.12, 0.25, 0.4];
 const INK = 0x120c08;
 
 function vec(x: number, y: number): Vec {
@@ -293,6 +299,8 @@ class Scene {
   readonly u: number;
   readonly laneGap: number;
   readonly ctx: AttackContext;
+  /** Streak ordinal, 0–3. */
+  readonly heat: number;
 
   private readonly fxG = new Graphics();
   private items: { t: number; fn: FxItem }[] = [];
@@ -300,11 +308,16 @@ class Scene {
   private fxRaf = 0;
   private fxLast = 0;
   private frozen = false;
+  /** Streak hit-stop owed to the next hold() (the contact hold). */
+  private stopBonus = 0;
+  /** Streak squash the next hold() presses into the target, easing out over the stop. */
+  private crush: { amount: number; along: boolean } | null = null;
   /** Cards handed back; world-space FX may still be fading. */
   private released = false;
 
   constructor(ctx: AttackContext) {
     this.ctx = ctx;
+    this.heat = clamp(Math.round(ctx.streak ?? 0), 0, STREAK_STOP_MS.length - 1);
     this.A = ctx.attacker;
     this.T = ctx.target;
     this.ag = geomOf(this.A);
@@ -368,11 +381,20 @@ class Scene {
 
   /** Hit-stop: both cards hold their contact pose; the victim vibrates along the hit. */
   async hold(ms: number, shake?: { card: Container; dir: Vec; amp: number }): Promise<void> {
+    ms += this.stopBonus;
+    this.stopBonus = 0;
+    const crush = this.crush;
+    this.crush = null;
     const pa = poseOf(this.A);
     const pt = poseOf(this.T);
     await this.tween(ms, (p, t) => {
       setPose(this.A, pa);
       setPose(this.T, pt);
+      if (crush) {
+        const c = crush.amount * (1 - ease.outCubic(p));
+        this.T.scale.x *= crush.along ? 1 - c : 1 + 0.6 * c;
+        this.T.scale.y *= crush.along ? 1 + 0.6 * c : 1 - c;
+      }
       if (shake) {
         const k = Math.floor(t / 20) % 2 === 0 ? 1 : -1;
         const a = shake.amp * (1 - p * 0.6) * k;
@@ -549,7 +571,10 @@ class Scene {
     this.markContact();
     const { p, poly } = hit;
     const u = this.u;
-    const w = weight;
+    const heat = this.heat;
+    const w = weight + STREAK_WEIGHT[heat];
+    const stop = STREAK_STOP_MS[heat];
+    this.stopBonus = stop;
     const seam = perp(m);
 
     if (poly.length >= 3) {
@@ -580,15 +605,30 @@ class Scene {
       return true;
     });
 
-    this.star(p, m, dir, w, !!opts.invert);
+    this.star(p, m, dir, w, !!opts.invert || heat >= 2);
     this.shockArc(p, dir, (22 + 16 * w) * u, (70 + 60 * w) * u, 200 + 110 * w, (6 + 3 * w) * u, 0.95, 20);
     this.shockArc(p, dir, (14 + 10 * w) * u, (46 + 40 * w) * u, 170 + 90 * w, (4 + 2 * w) * u, 0.7, 55);
     this.sparks(p, dir, 6 + Math.round(8 * w), (0.6 + 0.6 * w) * u, 0.8, 180 + 90 * w);
     this.sparks(p, seam, 2, 0.5 * u, 0.25, 150);
     this.sparks(p, vec(-seam.x, -seam.y), 2, 0.5 * u, 0.25, 150);
-    this.flash(this.T, this.tg, 1, 30 + 24 * w, 180 + 80 * w);
-    this.flash(this.A, this.ag, 0.4, 16, 140);
+    this.flash(this.T, this.tg, 1, 30 + 24 * w + stop, 180 + 80 * w);
+    this.flash(this.A, this.ag, heat > 0 ? 0.65 : 0.4, 16 + stop * 0.5, 140);
     this.shake(dir, (2 + 5 * w) * u);
+    if (heat > 0) this.streakCrush(p, dir, heat);
+  }
+
+  /**
+   * Streak load on the contact: the struck card is crushed flat against the hit and tight full rings
+   * pulse out of the overlap, one per streak step, so each repeat lands heavier than the last.
+   */
+  private streakCrush(p: Vec, dir: Vec, heat: number): void {
+    const u = this.u;
+    const r = Math.max(this.tg.hw, this.tg.hh);
+    for (let i = 0; i < heat; i++) {
+      this.ring(p, (10 + 6 * i) * u, r * (0.75 + 0.3 * i + 0.15 * heat), 220 + 50 * heat, (5 + heat) * u, 1, 28 + i * 46);
+    }
+    this.sparks(p, vec(-dir.x, -dir.y), 2 + 2 * heat, (0.5 + 0.15 * heat) * u, 1.1, 160 + 30 * heat);
+    this.crush = { amount: 0.05 * heat, along: Math.abs(dir.x) >= Math.abs(dir.y) };
   }
 
   private star(p: Vec, m: Vec, dir: Vec, w: number, invert: boolean): void {
