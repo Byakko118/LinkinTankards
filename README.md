@@ -11,7 +11,7 @@ npm run dev
 
 Open http://localhost:5173
 
-- **PvC (vs CPU):** http://localhost:5173/pvc.html — HP duel, Easy/Normal/Hard slip rates, seeded 20-card tavern deck
+- **PvC (vs CPU):** http://localhost:5173/pvc.html — 28-HP duel, hand of 6, Streak damage, Easy/Normal/Hard slip + streak-miss rates, seeded 20-card tavern deck (5 G · 5 A · 5 S · 5 K)
 - **Attack tester gallery:** http://localhost:5173/tester.html — speed select, *Freeze on contact*, *Play all*; URL `?speed=0.25&freeze=20` presets them
 - Hand-building UI: http://localhost:5173/?demo=hand
 - Valid full chain (G→K→A→S→G): http://localhost:5173/?demo=1

@@ -1,13 +1,13 @@
 import '../style.css';
 import './pvc.css';
 import { BoardPhase, GameBoard } from '../game/board';
-import { AiDifficulty, SLIP_RATE, planAiLine } from '../game/ai';
+import { AiDifficulty, SLIP_RATE, STREAK_MISS_RATE, planAiLine } from '../game/ai';
 import { hopDamageFromLinks } from '../game/hopDamage';
 import { evaluateLinks } from '../game/rules';
 import { SeededRng } from '../game/rng';
-import { TavernPile } from '../game/tavernDeck';
+import { HAND_SIZE, TavernPile } from '../game/tavernDeck';
 
-const START_HP = 20;
+const START_HP = 28;
 
 type Side = 'player' | 'cpu';
 
@@ -85,7 +85,7 @@ function selectDifficulty(diff: AiDifficulty, animate: boolean): void {
   const btn = diffRow.querySelector('.diff-btn.selected');
   if (btn && animate) restartClass(btn, 'pop');
   placeDiffThumb(animate);
-  diffBlurb.textContent = `Tavern rival · slips about 1 turn in ${Math.round(1 / SLIP_RATE[diff])}`;
+  diffBlurb.textContent = `Tavern rival · slips 1 turn in ${Math.round(1 / SLIP_RATE[diff])} · misses Streak 1 in ${Math.round(1 / STREAK_MISS_RATE[diff])}`;
   if (animate) restartClass(diffBlurb, 'swap');
 }
 
@@ -232,7 +232,7 @@ function showResult(winner: 'player' | 'cpu'): void {
 /** Recoil ticks on the Break beat (before the ink); hop damage lands after the score stamp. */
 async function resolveAttack(attacker: Side): Promise<void> {
   const defender: Side = attacker === 'player' ? 'cpu' : 'player';
-  const hops = hopDamageFromLinks(evaluateLinks(board.getPlayCards()));
+  const damage = hopDamageFromLinks(evaluateLinks(board.getPlayCards()));
   await board.resolve({
     damageMode: 'hops',
     onRecoil: () => {
@@ -241,9 +241,9 @@ async function resolveAttack(attacker: Side): Promise<void> {
       return animateHp(attacker, attacker === 'player' ? playerHp : cpuHp, 'recoil');
     },
   });
-  if (hops > 0) {
-    if (defender === 'cpu') cpuHp = Math.max(0, cpuHp - hops);
-    else playerHp = Math.max(0, playerHp - hops);
+  if (damage > 0) {
+    if (defender === 'cpu') cpuHp = Math.max(0, cpuHp - damage);
+    else playerHp = Math.max(0, playerHp - damage);
     await animateHp(defender, defender === 'cpu' ? cpuHp : playerHp, 'hit');
   }
   await wait(fastForward && attacker === 'cpu' ? 120 : 420);
@@ -272,7 +272,7 @@ async function runCpuTurn(): Promise<void> {
 
   board.setHandFaceDown(true);
   board.setInteractionAllowed(false);
-  const hand = cpuPile.drawHand(5);
+  const hand = cpuPile.drawHand(HAND_SIZE);
   board.dealToHand(hand);
   paintHud();
 
@@ -326,7 +326,7 @@ async function runCpuTurn(): Promise<void> {
 async function startPlayerTurn(): Promise<void> {
   setBanner('Your attack', 'you');
   setActive('player');
-  const hand = playerPile.drawHand(5);
+  const hand = playerPile.drawHand(HAND_SIZE);
   board.dealToHand(hand);
   paintRound();
   paintHud();

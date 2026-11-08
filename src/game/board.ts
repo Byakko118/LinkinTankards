@@ -14,7 +14,7 @@ import {
   laneAfter,
   resolveChainDamage,
 } from './rules';
-import { hopDamageFromLinks } from './hopDamage';
+import { MAX_LINE, comboDamageFromLinks } from './hopDamage';
 
 const W = 960;
 const H = 640;
@@ -23,7 +23,7 @@ const CARD_H = 142;
 const LANE_Y = [330, 180] as const; // bottom, top play lanes (headroom above air for overhead strikes)
 const SLOT_X = [110, 280, 450, 620, 790];
 const HAND_Y = 545;
-const MAX_SLOTS = 5;
+const MAX_SLOTS = MAX_LINE;
 
 // Hop contact geometry (attacks.ts) is measured from card bounds; keep this equal to the stroked card outline.
 const CARD_BOUNDS = new Rectangle(-CARD_W / 2 - 1.5, -CARD_H / 2 - 1.5, CARD_W + 3, CARD_H + 3);
@@ -512,10 +512,8 @@ export class GameBoard {
     this.emit();
     const token = ++this.animToken;
     const damageMode = opts?.damageMode ?? 'cards';
-    const dmg =
-      damageMode === 'hops'
-        ? hopDamageFromLinks(this.links)
-        : resolveChainDamage(this.play, this.links);
+    const combo = comboDamageFromLinks(this.links);
+    const dmg = damageMode === 'hops' ? combo.total : resolveChainDamage(this.play, this.links);
     const unbroken = chainLength(this.links);
     const breakAt = firstBreakIndex(this.links);
 
@@ -542,9 +540,10 @@ export class GameBoard {
 
     this.phase = 'resolved';
     const breakNote = breakAt >= 0 ? ` · broke at ${this.play[breakAt].type}→${this.play[breakAt + 1].type}` : '';
+    const streakNote = combo.streak > 0 ? ` (${combo.hops} ${combo.hops === 1 ? 'hop' : 'hops'} + ${combo.streak} streak)` : '';
     this.setTitle(
       damageMode === 'hops'
-        ? `Resolved · ${dmg} ${dmg === 1 ? 'hop' : 'hops'}${breakNote}`
+        ? `Resolved · ${dmg} damage${streakNote}${breakNote}`
         : `Resolved · ${dmg} damage${breakNote}`,
     );
     this.hintText.text = breakAt >= 0 ? 'Chain stopped at the broken link' : 'Full chain connected';
@@ -1423,7 +1422,7 @@ export class GameBoard {
     if (token !== this.animToken) return;
     const c = this.combo;
     const text = damageMode === 'hops' ? (damage === 0 ? '0' : `+${damage}`) : `+${damage}`;
-    const label = damageMode === 'hops' ? (damage === 1 ? 'HOP' : 'HOPS') : 'DAMAGE';
+    const label = 'DAMAGE';
     if (c.node.visible) {
       const from = { x: c.node.x, y: c.node.y };
       await this.tween(240, (p) => {
