@@ -1,4 +1,4 @@
-import { LuaFactory, type LuaEngine } from 'wasmoon';
+import * as WasmoonNS from 'wasmoon';
 import glueWasmUrl from 'wasmoon/dist/glue.wasm?url';
 import { createFxApi, type FxHostState } from './fxHost';
 import { sideForLua } from './luaBridge';
@@ -6,18 +6,44 @@ import { sideForLua } from './luaBridge';
 /** Soft wall-clock budget; Wasmoon count-hook checks every 1000 instructions. */
 const SCRIPT_TIMEOUT_MS = 50;
 
+type LuaFactoryCtor = typeof import('wasmoon').LuaFactory;
+type LuaEngine = import('wasmoon').LuaEngine;
+
+/** wasmoon is CJS (`exports.LuaFactory`). Named ESM import fails unless Vite prebundles it. */
+function resolveLuaFactory(): LuaFactoryCtor {
+  const ns = WasmoonNS as unknown as {
+    LuaFactory?: LuaFactoryCtor;
+    default?: { LuaFactory?: LuaFactoryCtor } | LuaFactoryCtor;
+  };
+  const fromDefault =
+    typeof ns.default === 'function'
+      ? undefined
+      : ns.default && typeof ns.default === 'object'
+        ? ns.default.LuaFactory
+        : undefined;
+  const Factory = ns.LuaFactory ?? fromDefault;
+  if (!Factory) {
+    throw new Error('wasmoon LuaFactory export missing (CJS/ESM interop)');
+  }
+  return Factory;
+}
+
+const LuaFactory = resolveLuaFactory();
+
 /** Browser: Vite `?url`. Node/vite-node: absolute file URL (root-relative `/node_modules/...` breaks on Windows). */
 function resolveGlueWasm(): string {
   if (typeof window !== 'undefined') return glueWasmUrl;
-  // Avoid `process` types — read cwd from Vite-node / Node global when present.
   const cwd =
-    (globalThis as { process?: { cwd?: () => string } }).process?.cwd?.() ??
-    '';
+    (globalThis as { process?: { cwd?: () => string } }).process?.cwd?.() ?? '';
   const path = `${cwd.replace(/\\/g, '/')}/node_modules/wasmoon/dist/glue.wasm`;
   return path.startsWith('/') ? `file://${path}` : `file:///${path}`;
 }
 
-const FACTORY = new LuaFactory(resolveGlueWasm());
+let factory: InstanceType<LuaFactoryCtor> | null = null;
+function getFactory(): InstanceType<LuaFactoryCtor> {
+  if (!factory) factory = new LuaFactory(resolveGlueWasm());
+  return factory;
+}
 
 const SANDBOX_STRIP = `
 io = nil
@@ -40,7 +66,7 @@ end
 `;
 
 async function createSandboxedEngine(): Promise<LuaEngine> {
-  const lua = await FACTORY.createEngine({
+  const lua = await getFactory().createEngine({
     openStandardLibs: true,
     injectObjects: true,
     enableProxy: false,

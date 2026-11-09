@@ -1,12 +1,6 @@
 import './style.css';
-import {
-  STARTER_CARDS,
-  runMockResolve,
-  starterById,
-  type MockResolveInput,
-  type ScriptedCardDef,
-  type CardChannelSnapshot,
-} from '../game/effect';
+import { STARTER_CARDS, starterById } from '../game/effect/starters';
+import type { MockResolveInput, ResolveRunResult, ScriptedCardDef } from '../game/effect/types';
 import type { CardType } from '../game/rules';
 import { STARTING_HP } from '../game/hopDamage';
 
@@ -77,25 +71,31 @@ const SCENARIOS: Record<string, Scenario> = {
   },
 };
 
-const starterEl = document.getElementById('starter') as HTMLSelectElement;
-const hooksEl = document.getElementById('hooks') as HTMLInputElement;
-const scriptEl = document.getElementById('script') as HTMLTextAreaElement;
-const resetEl = document.getElementById('reset-script') as HTMLButtonElement;
-const runEl = document.getElementById('run') as HTMLButtonElement;
-const statusEl = document.getElementById('status') as HTMLDivElement;
-const channelsEl = document.getElementById('channels') as HTMLDivElement;
-const logEl = document.getElementById('log') as HTMLPreElement;
-const hintEl = document.getElementById('scenario-hint') as HTMLParagraphElement;
+function requireEl<T extends HTMLElement>(id: string): T {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`Missing #${id}`);
+  return el as T;
+}
 
-const selfLineEl = document.getElementById('self-line') as HTMLInputElement;
-const selfUnplayedEl = document.getElementById('self-unplayed') as HTMLInputElement;
-const selfDrawEl = document.getElementById('self-draw') as HTMLInputElement;
-const selfDiscardEl = document.getElementById('self-discard') as HTMLInputElement;
-const selfHpEl = document.getElementById('self-hp') as HTMLInputElement;
-const capacityEl = document.getElementById('capacity') as HTMLInputElement;
-const enemyLineEl = document.getElementById('enemy-line') as HTMLInputElement;
-const enemyHpEl = document.getElementById('enemy-hp') as HTMLInputElement;
-const enemyFacesEl = document.getElementById('enemy-faces') as HTMLInputElement;
+const starterEl = requireEl<HTMLSelectElement>('starter');
+const hooksEl = requireEl<HTMLInputElement>('hooks');
+const scriptEl = requireEl<HTMLTextAreaElement>('script');
+const resetEl = requireEl<HTMLButtonElement>('reset-script');
+const runEl = requireEl<HTMLButtonElement>('run');
+const statusEl = requireEl<HTMLDivElement>('status');
+const channelsEl = requireEl<HTMLDivElement>('channels');
+const logEl = requireEl<HTMLPreElement>('log');
+const hintEl = requireEl<HTMLParagraphElement>('scenario-hint');
+
+const selfLineEl = requireEl<HTMLInputElement>('self-line');
+const selfUnplayedEl = requireEl<HTMLInputElement>('self-unplayed');
+const selfDrawEl = requireEl<HTMLInputElement>('self-draw');
+const selfDiscardEl = requireEl<HTMLInputElement>('self-discard');
+const selfHpEl = requireEl<HTMLInputElement>('self-hp');
+const capacityEl = requireEl<HTMLInputElement>('capacity');
+const enemyLineEl = requireEl<HTMLInputElement>('enemy-line');
+const enemyHpEl = requireEl<HTMLInputElement>('enemy-hp');
+const enemyFacesEl = requireEl<HTMLInputElement>('enemy-faces');
 
 function currentStarter(): ScriptedCardDef {
   return starterById(starterEl.value) ?? STARTER_CARDS[0];
@@ -152,42 +152,56 @@ function loadScenario(id: string): void {
   hintEl.textContent = sc.hint;
 }
 
-function fmtCard(c: CardChannelSnapshot): string {
-  const name = c.name ?? c.type;
-  return `#${c.slot} ${name}(${c.type}) hop ${c.hop} / streak ${c.streak} / effect ${c.effect} → out ${c.outgoing}`;
+function txt(v: unknown, fallback = '—'): string {
+  if (v == null) return fallback;
+  return String(v);
 }
 
-function renderResult(result: Awaited<ReturnType<typeof runMockResolve>>): void {
-  const bad = result.errors.length > 0;
+function fmtCard(c: ResolveRunResult['selfCards'][number]): string {
+  const name = c.name ?? c.type;
+  return `#${txt(c.slot)} ${txt(name)}(${txt(c.type)}) hop ${txt(c.hop, '0')} / streak ${txt(c.streak, '0')} / effect ${txt(c.effect, '0')} → out ${txt(c.outgoing, '0')}`;
+}
+
+function row(label: string, value: string): string {
+  return `<div class="channel-row"><span>${label}</span><span>${value}</span></div>`;
+}
+
+function renderResult(result: ResolveRunResult): void {
+  const errors = result.errors ?? [];
+  const bad = errors.length > 0;
   statusEl.className = `status ${bad ? 'bad' : 'ok'}`;
   statusEl.textContent = bad
-    ? `Finished with ${result.errors.length} script error(s).`
+    ? `Finished with ${errors.length} script error(s).`
     : 'Resolve complete.';
 
-  const lines: string[] = [];
-  lines.push('<div class="channel-row"><strong>Self</strong><span></span></div>');
-  for (const c of result.selfCards) {
-    lines.push(`<div class="channel-row"><span>slot ${c.slot}</span><span>${fmtCard(c)}</span></div>`);
+  const parts: string[] = [row('Self', '')];
+  for (const c of result.selfCards ?? []) {
+    parts.push(row(`slot ${txt(c.slot)}`, fmtCard(c)));
   }
-  if (result.selfBlocks.some((b) => b > 0)) {
-    lines.push(
-      `<div class="channel-row"><span>blocks</span><span>${result.selfBlocks.map((b, i) => `s${i + 1}:${b}`).join(' ')}</span></div>`,
+  const selfBlocks = result.selfBlocks ?? [];
+  if (selfBlocks.some((b) => b > 0)) {
+    parts.push(
+      row(
+        'blocks',
+        selfBlocks.map((b, i) => `s${i + 1}:${b}`).join(' '),
+      ),
     );
   }
-  lines.push(
-    `<div class="channel-row"><span>deals→enemy</span><span>${result.dealsToEnemy}</span></div>`,
+  parts.push(row('deals→enemy', txt(result.dealsToEnemy, '0')));
+  parts.push(
+    row(
+      'HP',
+      `self ${txt(result.selfHpAfter)} / enemy ${txt(result.enemyHpAfter)}`,
+    ),
   );
-  lines.push(
-    `<div class="channel-row"><span>HP</span><span>self ${result.selfHpAfter} / enemy ${result.enemyHpAfter}</span></div>`,
-  );
-  if (result.enemyCards.length) {
-    lines.push('<div class="channel-row"><strong>Enemy</strong><span></span></div>');
+  if ((result.enemyCards ?? []).length) {
+    parts.push(row('Enemy', ''));
     for (const c of result.enemyCards) {
-      lines.push(`<div class="channel-row"><span>slot ${c.slot}</span><span>${fmtCard(c)}</span></div>`);
+      parts.push(row(`slot ${txt(c.slot)}`, fmtCard(c)));
     }
   }
-  channelsEl.innerHTML = lines.join('');
-  logEl.textContent = result.log.join('\n');
+  channelsEl.innerHTML = parts.join('');
+  logEl.textContent = (result.log ?? []).join('\n') || '(empty log)';
 }
 
 async function run(): Promise<void> {
@@ -227,6 +241,8 @@ async function run(): Promise<void> {
   channelsEl.innerHTML = '';
 
   try {
+    // Dynamic import keeps the chrome/CSS boot independent of Wasmoon CJS interop.
+    const { runMockResolve } = await import('../game/effect/runResolve');
     const result = await runMockResolve(input, {
       editorCard: { slot, def: edited },
     });
@@ -234,6 +250,7 @@ async function run(): Promise<void> {
   } catch (err) {
     statusEl.className = 'status bad';
     statusEl.textContent = err instanceof Error ? err.message : String(err);
+    logEl.textContent = String(err);
   } finally {
     runEl.disabled = false;
   }

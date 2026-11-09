@@ -17,8 +17,9 @@ export default defineConfig({
       },
     },
   },
+  // Prebundle CJS wasmoon so named/default interop works in the browser.
   optimizeDeps: {
-    exclude: ['wasmoon'],
+    include: ['wasmoon'],
   },
   assetsInclude: ['**/*.wasm'],
 });
