@@ -312,32 +312,65 @@ toggleDocsEl.addEventListener('click', () => {
   requestAnimationFrame(() => editor.layout());
 });
 
-function isEditorFullscreen(): boolean {
-  return document.fullscreenElement === scriptChrome || document.body.classList.contains('editor-fs');
+/** CSS-only overlay when the Fullscreen API is missing or requestFullscreen fails. */
+let cssOnlyFullscreen = false;
+
+function isNativeFullscreen(): boolean {
+  return document.fullscreenElement === scriptChrome;
 }
 
+function isEditorFullscreen(): boolean {
+  return isNativeFullscreen() || cssOnlyFullscreen;
+}
+
+/**
+ * Keep button + layout in sync with the browser Fullscreen API.
+ * Esc exits native fullscreen without our toggle — must clear CSS fallback
+ * state derived from a previous sync, or the fixed overlay locks the page.
+ */
 function syncFullscreenChrome(): void {
+  if (!isNativeFullscreen()) {
+    // Native FS ended (Esc, browser UI, or exitFullscreen). Drop any leftover
+    // editor-fs that mirrored native — keep only an intentional CSS-only mode.
+    if (!cssOnlyFullscreen) {
+      document.body.classList.remove('editor-fs');
+    }
+  }
+
   const on = isEditorFullscreen();
-  document.body.classList.toggle('editor-fs', on);
+  document.body.classList.toggle('editor-fs', cssOnlyFullscreen);
   toggleFsEl.textContent = on ? 'Exit fullscreen' : 'Fullscreen';
   toggleFsEl.setAttribute('aria-pressed', on ? 'true' : 'false');
-  requestAnimationFrame(() => editor.layout());
+
+  requestAnimationFrame(() => {
+    editor.layout();
+    if (!on) {
+      // Restore typing after Esc/F11 exit — Monaco can lose focus when leaving FS.
+      editor.focus();
+    }
+  });
 }
 
 async function enterFullscreen(): Promise<void> {
+  cssOnlyFullscreen = false;
   try {
     if (scriptChrome.requestFullscreen) {
       await scriptChrome.requestFullscreen();
-    } else {
-      document.body.classList.add('editor-fs');
+      // fullscreenchange will sync; avoid treating a failed request as CSS mode
+      if (isNativeFullscreen()) {
+        syncFullscreenChrome();
+        return;
+      }
     }
+    cssOnlyFullscreen = true;
   } catch {
-    document.body.classList.add('editor-fs');
+    cssOnlyFullscreen = true;
   }
   syncFullscreenChrome();
 }
 
 async function exitFullscreen(): Promise<void> {
+  cssOnlyFullscreen = false;
   try {
     if (document.fullscreenElement) {
       await document.exitFullscreen();
@@ -355,7 +388,13 @@ async function toggleFullscreen(): Promise<void> {
 }
 
 toggleFsEl.addEventListener('click', () => void toggleFullscreen());
-document.addEventListener('fullscreenchange', () => syncFullscreenChrome());
+document.addEventListener('fullscreenchange', () => {
+  // Esc (and browser chrome) exit native FS here — clear derived CSS state.
+  if (!isNativeFullscreen()) {
+    cssOnlyFullscreen = false;
+  }
+  syncFullscreenChrome();
+});
 
 window.addEventListener('keydown', (ev) => {
   if (ev.key !== 'F11') return;
