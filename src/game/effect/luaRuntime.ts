@@ -103,6 +103,9 @@ export async function runCardHook(args: RunHookArgs): Promise<void> {
     let selfSnap = sideForLua(state.view.self.view);
     let enemySnap = sideForLua(state.view.enemy.view);
 
+    const actorSnap = () => (state.actor === 'enemy' ? enemySnap : selfSnap);
+    const foeSnap = () => (state.actor === 'enemy' ? selfSnap : enemySnap);
+
     const fxTable: Record<string, unknown> = {
       channels: host.channels,
       self: selfSnap,
@@ -131,6 +134,27 @@ export async function runCardHook(args: RunHookArgs): Promise<void> {
       deal: (targetHp: number, amount: number, channel: string, source?: unknown) =>
         host.deal(targetHp, amount, channel, source),
       block_slot: (slot: number, amount: number) => host.block_slot(slot, amount),
+
+      // Starter-friendly sugar — same power as fx.self.* / fx.add / …
+      my_line: () => (actorSnap() as { line: unknown }).line,
+      my_slot: () => (actorSnap() as { slot: number | null }).slot,
+      my_card: () => {
+        const snap = actorSnap() as { slot: number | null; line: { cards: unknown[] } };
+        if (snap.slot == null) return null;
+        return snap.line.cards[snap.slot - 1] ?? null;
+      },
+      line_cards: () => (actorSnap() as { line: { cards: unknown[] } }).line.cards,
+      my_chain: () => (actorSnap() as { chain: unknown }).chain,
+      empty_slots: () => (actorSnap() as { line: { empty: number } }).line.empty,
+      enemy_at_my_slot: () => {
+        const me = actorSnap() as { slot: number | null };
+        if (me.slot == null) return null;
+        const foe = foeSnap() as { line: { cards: unknown[] } };
+        return foe.line.cards[me.slot - 1] ?? null;
+      },
+      add_to_me: (amount: number) => host.add_to_me(amount),
+      deal_to_enemy: (amount: number) => host.deal_to_enemy(amount),
+      block_me: (amount: number) => host.block_me(amount),
     };
 
     const refreshSnaps = () => {

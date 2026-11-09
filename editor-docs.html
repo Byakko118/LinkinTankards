@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linkin' Tankards — Effect tutorials</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/editor/style.css" />
+    <link rel="stylesheet" href="/src/editor/docsPage.css" />
+  </head>
+  <body class="editor-page docs-page">
+    <div id="docs-app" class="docs-app">
+      <header class="top">
+        <div class="top-row">
+          <h1>Effect tutorials</h1>
+          <nav class="nav">
+            <a class="nav-link" href="/editor.html">← Lua editor</a>
+            <a class="nav-link" href="/">Gameplay</a>
+            <a class="nav-link" href="/pvc.html">PvC</a>
+          </nav>
+        </div>
+        <p class="tag tag-lead">
+          Step-by-step Lua for card effects — what <code>fx</code> is, what line/slot mean, and every starter walked line-by-line.
+        </p>
+        <p class="tag tag-sub">
+          Prefer sugar helpers (<code>fx.my_slot()</code>, <code>fx.add_to_me</code>, …). Dense <code>fx.self.*</code> still works when you need full power.
+        </p>
+      </header>
+
+      <nav class="docs-toc" aria-label="On this page">
+        <a href="#what-is-fx">What is fx?</a>
+        <a href="#line-slot">Line &amp; slot</a>
+        <a href="#sugar">Sugar helpers</a>
+        <a href="#thunderer">Thunderer</a>
+        <a href="#golem">Golem</a>
+        <a href="#sprinter">Sprinter</a>
+        <a href="#burnt">Burnt Offering</a>
+        <a href="#shield">Shield</a>
+        <a href="#mistakes">Common mistakes</a>
+        <a href="#limits">What stays dense</a>
+      </nav>
+
+      <article class="docs-article">
+        <section id="what-is-fx">
+          <h2>1. What is <code>fx</code>?</h2>
+          <p>
+            Every card script is plain Lua. Before the game calls your hook, it injects a table named
+            <code>fx</code> — the <strong>effects host API</strong>. You do not <code>require</code> it.
+            Think of it as the toolkit the tavern hands your card for one pulse.
+          </p>
+          <pre class="docs-pre">-- hooks: score
+function on_score(fx)
+  -- fx is already here. Read the board, then write damage.
+  fx.add_to_me(100)
+end</pre>
+          <ul>
+            <li><strong>SCORE</strong> (<code>on_score</code>) — after hop/streak are on the cards; add effect damage or deal direct HP.</li>
+            <li><strong>CLASH</strong> (<code>on_clash</code>) — after <em>both</em> sides finished SCORE; block incoming from mirrored slots.</li>
+            <li><strong>BUILD</strong> never runs scripts (no spoilers of OK/BREAK or damage).</li>
+          </ul>
+          <p>
+            Indices are <strong>1-based</strong> (Lua). Damage uses the locked ×100 scale (so <code>100</code> = one hop unit on the tally).
+          </p>
+        </section>
+
+        <section id="line-slot">
+          <h2>2. What “line” and “slot” mean</h2>
+          <p>
+            During an attack you play up to <strong>5 cards</strong> onto your <strong>line</strong> (order matters for hops).
+            Each played card sits in a <strong>slot</strong> numbered <code>1 … #cards</code>.
+          </p>
+          <ul>
+            <li><code>fx.my_slot()</code> — which seat <em>this</em> card is pulsing in right now.</li>
+            <li><code>fx.line_cards()</code> — the array of played cards (<code>L[1]</code>, <code>L[2]</code>, …).</li>
+            <li><code>fx.my_line()</code> — the whole Line table (<code>.cards</code>, <code>.capacity</code>, <code>.empty</code>, links, break).</li>
+            <li><code>fx.my_chain()</code> — only the unbroken valid-prefix segment that contains this card (empty if you sit past a BREAK).</li>
+            <li><code>fx.empty_slots()</code> — unused capacity (<code>5 − #played</code>), not leftover hand cards.</li>
+          </ul>
+          <pre class="docs-pre">-- Dense form you may still see in older notes:
+local line, i = fx.self.line, fx.self.slot
+
+-- Clearer equivalent:
+local i = fx.my_slot()
+local line = fx.my_line()
+local L = fx.line_cards()  -- same as line.cards</pre>
+          <p>
+            <strong>Mirrored slots:</strong> in CLASH, Shield looks at the enemy card in the <em>same</em> slot index
+            (<code>fx.enemy_at_my_slot()</code>). Empty enemy seat → nothing to block.
+          </p>
+        </section>
+
+        <section id="sugar">
+          <h2>3. Sugar helpers (prefer these)</h2>
+          <table class="docs-table">
+            <thead>
+              <tr><th>Helper</th><th>Same as</th><th>When</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>fx.my_line()</code></td><td><code>fx.self.line</code></td><td>read</td></tr>
+              <tr><td><code>fx.my_slot()</code></td><td><code>fx.self.slot</code></td><td>read</td></tr>
+              <tr><td><code>fx.my_card()</code></td><td>line card at my slot</td><td>read</td></tr>
+              <tr><td><code>fx.line_cards()</code></td><td><code>fx.self.line.cards</code></td><td>read</td></tr>
+              <tr><td><code>fx.my_chain()</code></td><td><code>fx.self.chain</code></td><td>read</td></tr>
+              <tr><td><code>fx.empty_slots()</code></td><td><code>fx.self.line.empty</code></td><td>read</td></tr>
+              <tr><td><code>fx.enemy_at_my_slot()</code></td><td><code>fx.enemy.line.cards[fx.self.slot]</code></td><td>read</td></tr>
+              <tr><td><code>fx.add_to_me(n)</code></td><td><code>fx.add(fx.self, n, "effect")</code></td><td>SCORE</td></tr>
+              <tr><td><code>fx.deal_to_enemy(n)</code></td><td><code>fx.deal(fx.enemy.hp, n, "effect", fx.self)</code></td><td>SCORE</td></tr>
+              <tr><td><code>fx.block_me(n)</code></td><td><code>fx.block_slot(fx.self.slot, n)</code></td><td>CLASH</td></tr>
+            </tbody>
+          </table>
+          <p>
+            Full power remains: <code>fx.self</code> / <code>fx.enemy</code>, <code>fx.outgoing</code>, hand/draw/discard helpers,
+            and writing to a <em>different</em> card with <code>fx.add(other, n, "effect")</code>.
+          </p>
+        </section>
+
+        <section id="thunderer">
+          <h2>4. Thunderer — walkthrough</h2>
+          <p><strong>Goal:</strong> if this card sits in any seat of an <code>S → K → S</code> triple on the played line, add <code>+100</code> effect.</p>
+          <pre class="docs-pre">-- hooks: score
+-- Neighbor windows still need Lua indexing (see “What stays dense”).
+function on_score(fx)
+  local i = fx.my_slot()
+  local L = fx.line_cards()
+  local function is_sks(a, b, c)
+    return a and b and c and a.type == "S" and b.type == "K" and c.type == "S"
+  end
+  if is_sks(L[i - 1], L[i], L[i + 1])
+     or is_sks(L[i], L[i + 1], L[i + 2])
+     or is_sks(L[i - 2], L[i - 1], L[i]) then
+    fx.add_to_me(100)
+  end
+end</pre>
+          <ol>
+            <li><code>i</code> = my slot. <code>L</code> = played cards array.</li>
+            <li><code>is_sks</code> checks three neighbors are present and typed S, K, S.</li>
+            <li>Three windows cover “I’m the middle K”, “I’m the left S”, and “I’m the right S”.</li>
+            <li><code>fx.add_to_me(100)</code> bumps <em>this</em> card’s effect channel (not a direct HP hit).</li>
+          </ol>
+          <p>In the editor, pick <strong>Thunderer</strong> — mock line <code>S @ S</code> expects +100 effect on the middle K.</p>
+        </section>
+
+        <section id="golem">
+          <h2>5. Golem — walkthrough</h2>
+          <p><strong>Goal:</strong> +50 effect per <code>G</code> sharing this card’s scored chain (valid-prefix segment).</p>
+          <pre class="docs-pre">function on_score(fx)
+  local n = 0
+  for _, c in ipairs(fx.my_chain()) do
+    if c.type == "G" then n = n + 1 end
+  end
+  fx.add_to_me(n * 50)
+end</pre>
+          <ol>
+            <li><code>fx.my_chain()</code> is not the whole line — only the unbroken segment containing self.</li>
+            <li>Past a BREAK, chain is empty → Golem adds 0.</li>
+            <li>Mock <code>G G @</code> → three G in chain → +150.</li>
+          </ol>
+        </section>
+
+        <section id="sprinter">
+          <h2>6. Sprinter — walkthrough</h2>
+          <p><strong>Goal:</strong> +30 effect per changer (<code>K</code> or <code>S</code>) on the <em>full</em> played line.</p>
+          <pre class="docs-pre">function on_score(fx)
+  local n = 0
+  for _, c in ipairs(fx.line_cards()) do
+    if c.type == "K" or c.type == "S" then n = n + 1 end
+  end
+  fx.add_to_me(n * 30)
+end</pre>
+          <ol>
+            <li>Uses <code>line_cards()</code>, not <code>my_chain()</code> — cards after a break still count if they were played.</li>
+            <li>Does not count unplayed hand cards.</li>
+            <li>Mock <code>K @ S</code> → two changers → +60.</li>
+          </ol>
+        </section>
+
+        <section id="burnt">
+          <h2>7. Burnt Offering — walkthrough</h2>
+          <p><strong>Goal:</strong> deal <code>100 × empty line slots</code> straight to enemy HP.</p>
+          <pre class="docs-pre">function on_score(fx)
+  local empty = fx.empty_slots()
+  if empty > 0 then
+    fx.deal_to_enemy(empty * 100)
+  end
+end</pre>
+          <ol>
+            <li><code>empty_slots()</code> = capacity − played count (line empties, not hand leftovers).</li>
+            <li><code>deal_to_enemy</code> is direct HP — bypasses mirrored slot clash / Shield unless a future API blocks directs.</li>
+            <li>Mock 2-card line on capacity 5 → 3 empties → 300 to enemy.</li>
+          </ol>
+        </section>
+
+        <section id="shield">
+          <h2>8. Shield — walkthrough</h2>
+          <p><strong>Goal:</strong> in CLASH, block half of the enemy card sitting in my mirrored slot.</p>
+          <pre class="docs-pre">-- hooks: clash
+function on_clash(fx)
+  local foe = fx.enemy_at_my_slot()
+  if not foe then return end
+  local half = math.floor(fx.outgoing(foe) / 2)
+  fx.block_me(half)
+end</pre>
+          <ol>
+            <li>Must declare <code>clash</code> in the hooks line — SCORE writers cannot call <code>block_me</code>.</li>
+            <li><code>fx.outgoing(foe)</code> sums hop+streak+effect on that enemy card (frozen after SCORE).</li>
+            <li><code>block_me</code> reduces what that enemy slot deals to you on APPLY.</li>
+            <li>PvC with an empty enemy line → foe is nil → Shield no-ops (expected until dual lines / PvP).</li>
+          </ol>
+        </section>
+
+        <section id="mistakes">
+          <h2>9. Common mistakes</h2>
+          <ul>
+            <li><strong>0-based indexing</strong> — Lua arrays are 1-based. <code>L[0]</code> is always nil.</li>
+            <li><strong>Reading enemy outgoing in SCORE</strong> — forbidden / meaningless for clash design. Use <code>on_clash</code>.</li>
+            <li><strong>Calling <code>add_to_me</code> in CLASH</strong> — SCORE-only write; host logs and ignores.</li>
+            <li><strong>Calling <code>block_me</code> in SCORE</strong> — CLASH-only; host logs and ignores.</li>
+            <li><strong>Confusing line empties with hand leftovers</strong> — Burnt Offering uses line capacity, hand is 6.</li>
+            <li><strong>Using <code>my_chain</code> when you meant the full line</strong> — Sprinter wants <code>line_cards()</code>.</li>
+            <li><strong>Forgetting the hooks header</strong> — editor Hooks field / <code>-- hooks: score</code> must match the functions you define.</li>
+            <li><strong>Writing channel <code>"mult"</code></strong> — v0 writers may only use <code>"effect"</code> (sugar already picks effect).</li>
+            <li><strong>Expecting Shield to eat Burnt Offering</strong> — directs bypass slots by design.</li>
+          </ul>
+        </section>
+
+        <section id="limits">
+          <h2>10. What can’t be simpler without losing power</h2>
+          <p>
+            Sugar removes dense <em>paths</em>, not control flow. These still need real Lua — wrapping them in a host helper
+            would either be a one-off card API or hide the rules you need to tweak:
+          </p>
+          <ul>
+            <li><strong>Thunderer neighbor windows</strong> — three overlapping S-K-S seats. A <code>fx.in_sks()</code> would be
+              Thunderer-only product logic inside the host, not a general verb.</li>
+            <li><strong>Custom patterns</strong> — “two Airs with a Gap”, type sequences, counting with early <code>break</code> —
+              keep <code>for</code> / <code>if</code> in the script.</li>
+            <li><strong>Targeting another card</strong> — <code>add_to_me</code> is the pulsing card only; buffing a neighbor
+              still uses <code>fx.add(L[i-1], n, "effect")</code>.</li>
+            <li><strong>Channel filters</strong> — <code>fx.outgoing(card, { skip = "streak" })</code> stays explicit for rare pierce-shield designs.</li>
+            <li><strong>Hand / draw / discard vision</strong> — pile helpers stay side-argument form (<code>fx.unplayed(fx.self)</code>)
+              because enemy faces are gated by reveal rules.</li>
+          </ul>
+          <p>
+            Open the <a href="/editor.html">Lua effect editor</a>, pick a starter, hit <strong>Run</strong>, and use
+            <strong>Fullscreen (F11)</strong> when you want Monaco alone.
+          </p>
+        </section>
+      </article>
+    </div>
+  </body>
+</html>

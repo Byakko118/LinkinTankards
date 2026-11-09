@@ -2,72 +2,81 @@ import type { ScriptedCardDef } from './types';
 
 const BLANK_SCRIPT = `-- hooks: score
 -- fx = effects toolkit the game injects into this script (host API).
--- fx.self  = this card's side right now (line, slot, chain, hand, hp, …)
--- fx.add(fx.self, 100, "effect")  = add 100 to THIS card's effect damage
--- fx.deal(fx.enemy.hp, 100, "effect", fx.self)  = hit enemy HP directly
--- Add "clash" to the hooks line when you implement on_clash.
+-- Prefer the sugar helpers when you can — they avoid dense fx.self.* paths:
+--   fx.my_slot() / fx.my_line() / fx.line_cards() / fx.my_chain()
+--   fx.add_to_me(n)       = fx.add(fx.self, n, "effect")
+--   fx.deal_to_enemy(n)   = fx.deal(fx.enemy.hp, n, "effect", fx.self)
+--   fx.block_me(n)        = fx.block_slot(fx.self.slot, n)
+-- Full power (fx.self / fx.enemy / fx.add / …) is still available.
 
 function on_score(fx)
-  -- SCORE: hop/streak already attributed; write with fx.add / fx.deal
-  local _ = fx.self.slot
+  -- SCORE: hop/streak already attributed; write with fx.add_to_me / fx.deal_to_enemy
+  local _ = fx.my_slot()
 end
 
 -- function on_clash(fx)
---   -- CLASH: both sides scored; block incoming with fx.block_slot
---   -- local foe = fx.enemy.line.cards[fx.self.slot]
---   -- fx.block_slot(fx.self.slot, math.floor(fx.outgoing(foe) / 2))
+--   -- CLASH: both sides scored; block incoming with fx.block_me
+--   -- local foe = fx.enemy_at_my_slot()
+--   -- fx.block_me(math.floor(fx.outgoing(foe) / 2))
 -- end
 `;
 
 const THUNDERER_SCRIPT = `-- hooks: score
+-- Why not fully sugar? Neighbor windows (S-K-S in any of three seats) need
+-- real Lua indexing — a helper would just be a Thunderer-only special case.
 function on_score(fx)
-  local line, i = fx.self.line, fx.self.slot
+  -- Instead of: local line, i = fx.self.line, fx.self.slot
+  local i = fx.my_slot()
+  local L = fx.line_cards()
   local function is_sks(a, b, c)
     return a and b and c and a.type == "S" and b.type == "K" and c.type == "S"
   end
-  local L = line.cards
   if is_sks(L[i - 1], L[i], L[i + 1])
      or is_sks(L[i], L[i + 1], L[i + 2])
      or is_sks(L[i - 2], L[i - 1], L[i]) then
-    fx.add(fx.self, 100, "effect")
+    fx.add_to_me(100)  -- same as fx.add(fx.self, 100, "effect")
   end
 end
 `;
 
 const SHIELD_SCRIPT = `-- hooks: clash
+-- Mirrored-slot block: sugar hides fx.enemy.line.cards[fx.self.slot].
 function on_clash(fx)
-  local foe = fx.enemy.line.cards[fx.self.slot]
+  local foe = fx.enemy_at_my_slot()
   if not foe then return end
   local half = math.floor(fx.outgoing(foe) / 2)
-  fx.block_slot(fx.self.slot, half)  -- reduces what that enemy slot deals to us
+  fx.block_me(half)  -- same as fx.block_slot(fx.self.slot, half)
 end
 `;
 
 const GOLEM_SCRIPT = `-- hooks: score
+-- Chain = unbroken valid-prefix segment containing this card.
 function on_score(fx)
   local n = 0
-  for _, c in ipairs(fx.self.chain) do  -- unbroken prefix segment containing self
+  for _, c in ipairs(fx.my_chain()) do  -- same as fx.self.chain
     if c.type == "G" then n = n + 1 end
   end
-  fx.add(fx.self, n * 50, "effect")
+  fx.add_to_me(n * 50)
 end
 `;
 
 const SPRINTER_SCRIPT = `-- hooks: score
+-- Counts the full played line (including past BREAK), not hand leftovers.
 function on_score(fx)
   local n = 0
-  for _, c in ipairs(fx.self.line.cards) do
+  for _, c in ipairs(fx.line_cards()) do  -- same as fx.self.line.cards
     if c.type == "K" or c.type == "S" then n = n + 1 end
   end
-  fx.add(fx.self, n * 30, "effect")
+  fx.add_to_me(n * 30)
 end
 `;
 
 const BURNT_OFFERING_SCRIPT = `-- hooks: score
+-- empty_slots = unused line capacity (MAX_LINE − played), not leftover hand.
 function on_score(fx)
-  local empty = fx.self.line.capacity - #fx.self.line.cards  -- MAX_LINE (5) − played
+  local empty = fx.empty_slots()  -- same as fx.self.line.empty
   if empty > 0 then
-    fx.deal(fx.enemy.hp, empty * 100, "effect", fx.self)
+    fx.deal_to_enemy(empty * 100)  -- direct HP; bypasses slot clash / Shield
   end
 end
 `;

@@ -21,6 +21,7 @@
             <a class="nav-link" href="/">Gameplay</a>
             <a class="nav-link" href="/pvc.html">PvC</a>
             <a class="nav-link" href="/tester.html">Attacks</a>
+            <a class="nav-link" href="/editor-docs.html">Effect tutorials</a>
           </nav>
         </div>
         <p class="tag tag-lead">
@@ -55,9 +56,11 @@
             </label>
             <button type="button" id="reset-script">Reset script</button>
             <button type="button" id="toggle-docs" class="ghost">Docs</button>
+            <a class="nav-link toolbar-link" href="/editor-docs.html">Tutorials</a>
+            <button type="button" id="toggle-fullscreen" class="ghost" title="Fullscreen (F11)">Fullscreen</button>
             <button type="button" id="run" class="primary">Run SCORE→CLASH→APPLY</button>
           </div>
-          <div class="script-split">
+          <div class="script-split" id="script-chrome">
             <div class="monaco-wrap">
               <div id="monaco-host" class="monaco-host" aria-label="Lua script editor"></div>
             </div>

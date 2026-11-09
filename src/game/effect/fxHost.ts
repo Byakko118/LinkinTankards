@@ -76,6 +76,14 @@ function sideOf(state: FxHostState, side: SideId | BuiltSide | unknown): BuiltSi
   return state.actor === 'self' ? state.view.self : state.view.enemy;
 }
 
+function actorSide(state: FxHostState): BuiltSide {
+  return state.actor === 'self' ? state.view.self : state.view.enemy;
+}
+
+function enemySide(state: FxHostState): BuiltSide {
+  return state.actor === 'self' ? state.view.enemy : state.view.self;
+}
+
 function ensureBlockArray(arr: number[], slot: number): void {
   while (arr.length < slot) arr.push(0);
 }
@@ -103,6 +111,66 @@ export function createFxApi(state: FxHostState) {
       sum += parts[ch];
     }
     return sum;
+  }
+
+  function add(card: unknown, amount: number, channel: string) {
+    if (state.phase !== 'score') {
+      state.log.push(`fx.add blocked outside SCORE (${state.phase})`);
+      return;
+    }
+    if (channel !== 'effect') {
+      state.log.push(`fx.add rejected channel "${channel}" (v0 writers: effect only)`);
+      return;
+    }
+    const n = Math.floor(Number(amount) || 0);
+    const built = resolveBuiltCard(state, card);
+    if (!built) {
+      state.log.push('fx.add: could not resolve card');
+      return;
+    }
+    built.mutable.effect += n;
+    built.view.outgoing_effect = built.mutable.effect;
+    state.log.push(
+      `add +${n} effect → ${built.view.name ?? built.view.type} slot ${built.view.slot}`,
+    );
+  }
+
+  function deal(targetHp: number, amount: number, channel: string, _source?: unknown) {
+    if (state.phase !== 'score') {
+      state.log.push(`fx.deal blocked outside SCORE (${state.phase})`);
+      return;
+    }
+    if (channel !== 'effect') {
+      state.log.push(`fx.deal rejected channel "${channel}"`);
+      return;
+    }
+    const n = Math.floor(Number(amount) || 0);
+    // target is the HP number of a side — match against current views
+    if (targetHp === state.view.enemy.view.hp || targetHp === state.view.enemy.hp) {
+      state.deals.toEnemy += n;
+      state.log.push(`deal ${n} direct → enemy HP`);
+    } else if (targetHp === state.view.self.view.hp || targetHp === state.view.self.hp) {
+      state.deals.toSelf += n;
+      state.log.push(`deal ${n} direct → self HP`);
+    } else {
+      // Fallback: attacking side deals to enemy
+      state.deals.toEnemy += n;
+      state.log.push(`deal ${n} direct → enemy HP (fallback)`);
+    }
+  }
+
+  function block_slot(slot: number, amount: number) {
+    if (state.phase !== 'clash') {
+      state.log.push(`fx.block_slot blocked outside CLASH (${state.phase})`);
+      return;
+    }
+    const n = Math.floor(Number(amount) || 0);
+    const s = Math.floor(Number(slot) || 0);
+    if (s < 1) return;
+    const blocks = state.blocks[state.actor];
+    ensureBlockArray(blocks, s);
+    blocks[s - 1] = (blocks[s - 1] ?? 0) + n;
+    state.log.push(`block_slot ${s} += ${n} (${state.actor})`);
   }
 
   return {
@@ -138,62 +206,57 @@ export function createFxApi(state: FxHostState) {
       const side = sideOf(state, sideArg);
       return side.hideFaces ? null : side.view.discard.cards;
     },
-    add(card: unknown, amount: number, channel: string) {
-      if (state.phase !== 'score') {
-        state.log.push(`fx.add blocked outside SCORE (${state.phase})`);
-        return;
-      }
-      if (channel !== 'effect') {
-        state.log.push(`fx.add rejected channel "${channel}" (v0 writers: effect only)`);
-        return;
-      }
-      const n = Math.floor(Number(amount) || 0);
-      const built = resolveBuiltCard(state, card);
-      if (!built) {
-        state.log.push('fx.add: could not resolve card');
-        return;
-      }
-      built.mutable.effect += n;
-      built.view.outgoing_effect = built.mutable.effect;
-      state.log.push(
-        `add +${n} effect → ${built.view.name ?? built.view.type} slot ${built.view.slot}`,
-      );
+    add,
+    deal,
+    block_slot,
+
+    // --- Starter-friendly sugar (same power as fx.self.* / fx.add / …) ---
+    /** Line of the acting side — same as fx.self.line. */
+    my_line() {
+      return actorSide(state).view.line;
     },
-    deal(targetHp: number, amount: number, channel: string, _source?: unknown) {
-      if (state.phase !== 'score') {
-        state.log.push(`fx.deal blocked outside SCORE (${state.phase})`);
-        return;
-      }
-      if (channel !== 'effect') {
-        state.log.push(`fx.deal rejected channel "${channel}"`);
-        return;
-      }
-      const n = Math.floor(Number(amount) || 0);
-      // target is the HP number of a side — match against current views
-      if (targetHp === state.view.enemy.view.hp || targetHp === state.view.enemy.hp) {
-        state.deals.toEnemy += n;
-        state.log.push(`deal ${n} direct → enemy HP`);
-      } else if (targetHp === state.view.self.view.hp || targetHp === state.view.self.hp) {
-        state.deals.toSelf += n;
-        state.log.push(`deal ${n} direct → self HP`);
-      } else {
-        // Fallback: attacking side deals to enemy
-        state.deals.toEnemy += n;
-        state.log.push(`deal ${n} direct → enemy HP (fallback)`);
-      }
+    /** 1-based slot of the card currently pulsing — same as fx.self.slot. */
+    my_slot() {
+      return actorSide(state).view.slot;
     },
-    block_slot(slot: number, amount: number) {
-      if (state.phase !== 'clash') {
-        state.log.push(`fx.block_slot blocked outside CLASH (${state.phase})`);
-        return;
-      }
-      const n = Math.floor(Number(amount) || 0);
-      const s = Math.floor(Number(slot) || 0);
-      if (s < 1) return;
-      const blocks = state.blocks[state.actor];
-      ensureBlockArray(blocks, s);
-      blocks[s - 1] = (blocks[s - 1] ?? 0) + n;
-      state.log.push(`block_slot ${s} += ${n} (${state.actor})`);
+    /** The pulsing card view, or null if slot empty. */
+    my_card() {
+      const side = actorSide(state);
+      const slot = side.view.slot;
+      if (slot == null) return null;
+      return side.lineCards[slot - 1]?.view ?? null;
+    },
+    /** Played cards on my line — same as fx.self.line.cards. */
+    line_cards() {
+      return actorSide(state).view.line.cards;
+    },
+    /** Valid-prefix segment containing self — same as fx.self.chain. */
+    my_chain() {
+      return actorSide(state).view.chain;
+    },
+    /** Unused line slots — same as fx.self.line.empty. */
+    empty_slots() {
+      return actorSide(state).view.line.empty;
+    },
+    /** Enemy card in my mirrored slot — same as fx.enemy.line.cards[fx.self.slot]. */
+    enemy_at_my_slot() {
+      const slot = actorSide(state).view.slot;
+      if (slot == null) return null;
+      return enemySide(state).lineCards[slot - 1]?.view ?? null;
+    },
+    /** SCORE: add effect damage to the pulsing card — fx.add(fx.self, n, "effect"). */
+    add_to_me(amount: number) {
+      add(actorSide(state).view, amount, 'effect');
+    },
+    /** SCORE: deal effect damage to enemy HP — fx.deal(fx.enemy.hp, n, "effect", fx.self). */
+    deal_to_enemy(amount: number) {
+      deal(enemySide(state).view.hp, amount, 'effect', actorSide(state).view);
+    },
+    /** CLASH: block incoming from my mirrored slot — fx.block_slot(fx.self.slot, n). */
+    block_me(amount: number) {
+      const slot = actorSide(state).view.slot;
+      if (slot == null) return;
+      block_slot(slot, amount);
     },
   };
 }

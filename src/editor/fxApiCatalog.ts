@@ -114,6 +114,82 @@ export const FX_ROOT: FxSymbol[] = [
     documentation: 'Damage channel names. Scripts write effect; hop/streak are host-attributed.',
     kind: 'property',
   },
+  {
+    label: 'fx.my_line',
+    insertText: 'fx.my_line()',
+    detail: 'my_line() → Line',
+    documentation:
+      'Sugar for fx.self.line — the acting side’s played line (.cards .capacity .empty .links .break_at).',
+    kind: 'method',
+  },
+  {
+    label: 'fx.my_slot',
+    insertText: 'fx.my_slot()',
+    detail: 'my_slot() → number|nil',
+    documentation: 'Sugar for fx.self.slot — 1-based slot of the card currently pulsing this hook.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.my_card',
+    insertText: 'fx.my_card()',
+    detail: 'my_card() → Card|nil',
+    documentation: 'The pulsing card on my line (line.cards[my_slot]), or nil.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.line_cards',
+    insertText: 'fx.line_cards()',
+    detail: 'line_cards() → Card[]',
+    documentation: 'Sugar for fx.self.line.cards — played cards in order (1-based in Lua).',
+    kind: 'method',
+  },
+  {
+    label: 'fx.my_chain',
+    insertText: 'fx.my_chain()',
+    detail: 'my_chain() → Card[]',
+    documentation:
+      'Sugar for fx.self.chain — valid-prefix segment containing self (empty if past BREAK). Used by Golem.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.empty_slots',
+    insertText: 'fx.empty_slots()',
+    detail: 'empty_slots() → number',
+    documentation:
+      'Sugar for fx.self.line.empty — unused line capacity (MAX_LINE − played). Burnt Offering.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.enemy_at_my_slot',
+    insertText: 'fx.enemy_at_my_slot()',
+    detail: 'enemy_at_my_slot() → Card|nil',
+    documentation:
+      'Sugar for fx.enemy.line.cards[fx.self.slot] — mirrored enemy card, or nil. Used by Shield.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.add_to_me',
+    insertText: 'fx.add_to_me(${1:100})',
+    detail: 'add_to_me(amount)',
+    documentation: 'SCORE sugar: fx.add(fx.self, amount, "effect") — bump this card’s effect channel.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.deal_to_enemy',
+    insertText: 'fx.deal_to_enemy(${1:100})',
+    detail: 'deal_to_enemy(amount)',
+    documentation:
+      'SCORE sugar: fx.deal(fx.enemy.hp, amount, "effect", fx.self) — direct HP, bypasses slot clash.',
+    kind: 'method',
+  },
+  {
+    label: 'fx.block_me',
+    insertText: 'fx.block_me(${1:amount})',
+    detail: 'block_me(amount)',
+    documentation:
+      'CLASH sugar: fx.block_slot(fx.self.slot, amount) — reduce incoming from the mirrored enemy slot.',
+    kind: 'method',
+  },
 ];
 
 export const SIDE_FIELDS: FxSymbol[] = [
@@ -297,7 +373,7 @@ export const HOOK_SNIPPETS: FxSymbol[] = [
   {
     label: 'on_score',
     insertText:
-      'function on_score(fx)\n  ${1:-- SCORE: own line / fx.add / fx.deal}\nend',
+      'function on_score(fx)\n  ${1:-- SCORE: fx.line_cards() / fx.add_to_me / fx.deal_to_enemy}\nend',
     detail: 'SCORE hook',
     documentation:
       'Runs per card in ascending slot after hops/streak attributed. Thunderer, Golem, Sprinter, Burnt Offering.',
@@ -306,7 +382,7 @@ export const HOOK_SNIPPETS: FxSymbol[] = [
   {
     label: 'on_clash',
     insertText:
-      'function on_clash(fx)\n  ${1:-- CLASH: read enemy outgoing; fx.block_slot}\nend',
+      'function on_clash(fx)\n  ${1:-- CLASH: fx.enemy_at_my_slot(); fx.block_me}\nend',
     detail: 'CLASH hook',
     documentation:
       'Runs after both sides finished SCORE. Shield blocks half of mirrored enemy slot outgoing.',

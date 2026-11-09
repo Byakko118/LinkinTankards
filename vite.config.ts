@@ -14,6 +14,7 @@ export default defineConfig({
         pvc: resolve(__dirname, 'pvc.html'),
         tester: resolve(__dirname, 'tester.html'),
         editor: resolve(__dirname, 'editor.html'),
+        editorDocs: resolve(__dirname, 'editor-docs.html'),
       },
     },
   },

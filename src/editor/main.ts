@@ -95,6 +95,8 @@ const monacoHost = requireEl<HTMLDivElement>('monaco-host');
 const docsPanel = requireEl<HTMLElement>('docs-panel');
 const resetEl = requireEl<HTMLButtonElement>('reset-script');
 const toggleDocsEl = requireEl<HTMLButtonElement>('toggle-docs');
+const toggleFsEl = requireEl<HTMLButtonElement>('toggle-fullscreen');
+const scriptChrome = requireEl<HTMLDivElement>('script-chrome');
 const runEl = requireEl<HTMLButtonElement>('run');
 const statusEl = requireEl<HTMLDivElement>('status');
 const channelsEl = requireEl<HTMLDivElement>('channels');
@@ -310,9 +312,61 @@ toggleDocsEl.addEventListener('click', () => {
   requestAnimationFrame(() => editor.layout());
 });
 
+function isEditorFullscreen(): boolean {
+  return document.fullscreenElement === scriptChrome || document.body.classList.contains('editor-fs');
+}
+
+function syncFullscreenChrome(): void {
+  const on = isEditorFullscreen();
+  document.body.classList.toggle('editor-fs', on);
+  toggleFsEl.textContent = on ? 'Exit fullscreen' : 'Fullscreen';
+  toggleFsEl.setAttribute('aria-pressed', on ? 'true' : 'false');
+  requestAnimationFrame(() => editor.layout());
+}
+
+async function enterFullscreen(): Promise<void> {
+  try {
+    if (scriptChrome.requestFullscreen) {
+      await scriptChrome.requestFullscreen();
+    } else {
+      document.body.classList.add('editor-fs');
+    }
+  } catch {
+    document.body.classList.add('editor-fs');
+  }
+  syncFullscreenChrome();
+}
+
+async function exitFullscreen(): Promise<void> {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    }
+  } catch {
+    /* ignore */
+  }
+  document.body.classList.remove('editor-fs');
+  syncFullscreenChrome();
+}
+
+async function toggleFullscreen(): Promise<void> {
+  if (isEditorFullscreen()) await exitFullscreen();
+  else await enterFullscreen();
+}
+
+toggleFsEl.addEventListener('click', () => void toggleFullscreen());
+document.addEventListener('fullscreenchange', () => syncFullscreenChrome());
+
+window.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'F11') return;
+  ev.preventDefault();
+  void toggleFullscreen();
+});
+
 editor.addCommand(KeyMod.CtrlCmd | KeyCode.Enter, () => {
   void run();
 });
 
 loadScenario('blank');
 starterEl.value = 'blank';
+syncFullscreenChrome();
