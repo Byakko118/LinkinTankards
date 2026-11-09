@@ -49,9 +49,11 @@
         <div class="hp-bar">
           <div id="fighter-player" class="fighter you">
             <span class="who">You</span>
-            <span id="hp-player" class="hp">2800</span>
+            <div class="hp-row">
+              <span id="hp-player" class="hp">2800</span>
+              <div class="hp-pops" aria-hidden="true"></div>
+            </div>
             <div class="hp-track" aria-hidden="true"><div class="hp-ghost"></div><div class="hp-fill"></div></div>
-            <div class="hp-pops" aria-hidden="true"></div>
           </div>
           <div class="round-pill">
             <span class="label">Round</span>
@@ -59,9 +61,11 @@
           </div>
           <div id="fighter-cpu" class="fighter cpu">
             <span class="who">CPU <em id="cpu-diff">Normal</em></span>
-            <span id="hp-cpu" class="hp">2800</span>
+            <div class="hp-row">
+              <span id="hp-cpu" class="hp">2800</span>
+              <div class="hp-pops" aria-hidden="true"></div>
+            </div>
             <div class="hp-track" aria-hidden="true"><div class="hp-ghost"></div><div class="hp-fill"></div></div>
-            <div class="hp-pops" aria-hidden="true"></div>
           </div>
         </div>
         <p id="turn-banner" class="turn-banner">Your attack</p>
