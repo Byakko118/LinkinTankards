@@ -294,11 +294,13 @@ button.ghost.engaged {
 .fighter .hp {
   display: inline-block;
   font-family: 'Bebas Neue', Impact, sans-serif;
-  font-size: 2.4rem;
+  font-size: 2rem;
+  letter-spacing: 0.02em;
   color: var(--parchment);
   line-height: 1;
   transform-origin: left center;
   transition: color 320ms;
+  font-variant-numeric: tabular-nums;
 }
 
 .fighter.cpu .hp {

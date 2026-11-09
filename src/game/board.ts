@@ -15,7 +15,15 @@ import {
   laneAfter,
   resolveChainDamage,
 } from './rules';
-import { MAX_LINE, comboDamageFromLinks, streakSteps } from './hopDamage';
+import {
+  BREAK_RECOIL,
+  HOP_DAMAGE,
+  MAX_LINE,
+  STREAK_BONUS,
+  comboDamageFromLinks,
+  streakSealText,
+  streakSteps,
+} from './hopDamage';
 import { HAND_SIZE } from './tavernDeck';
 
 const W = 960;
@@ -568,7 +576,8 @@ export class GameBoard {
 
     this.phase = 'resolved';
     const breakNote = breakAt >= 0 ? ` · broke at ${this.play[breakAt].type}→${this.play[breakAt + 1].type}` : '';
-    const streakNote = combo.streak > 0 ? ` (${combo.hops} ${combo.hops === 1 ? 'hop' : 'hops'} + ${combo.streak} streak)` : '';
+    const streakNote =
+      combo.streak > 0 ? ` (${combo.hops} hops + ${combo.streak} streak)` : combo.hops > 0 ? ` (${combo.hops} hops)` : '';
     this.setTitle(
       damageMode === 'hops'
         ? `Resolved · ${dmg} damage${streakNote}${breakNote}`
@@ -1465,10 +1474,10 @@ export class GameBoard {
     c.shake = 0;
   }
 
-  /** Hop counter punches on every contact frame. */
+  /** Hop counter punches on every contact frame (HOP_DAMAGE per legal hop). */
   private comboHit(): void {
     const c = this.combo;
-    c.count += 1;
+    c.count += this.scoring === 'hops' ? HOP_DAMAGE : 1;
     if (!c.node.visible) {
       c.node.visible = true;
       c.node.alpha = 1;
@@ -1478,7 +1487,7 @@ export class GameBoard {
     }
     c.num.text = String(c.count);
     c.flash.text = c.num.text;
-    c.label.text = c.count === 1 ? 'HOP' : 'HOPS';
+    c.label.text = c.count === HOP_DAMAGE || c.count === 1 ? 'HOP' : 'HOPS';
     c.punch = 1;
   }
 
@@ -1548,7 +1557,7 @@ export class GameBoard {
   private async recoilBurst(token: number): Promise<void> {
     if (token !== this.animToken) return;
     const label = new Text({
-      text: '−1 recoil',
+      text: `−${BREAK_RECOIL} recoil`,
       style: new TextStyle({
         fontFamily: 'Bebas Neue, Impact, sans-serif',
         fontSize: 36,
@@ -1672,18 +1681,18 @@ export class GameBoard {
     return word;
   }
 
-  /** Streak seal pressed onto the middle of an OK link: the pen rings it, then "+1" thumps in. Bigger per step. */
+  /** Streak seal pressed onto the middle of an OK link: the pen rings it, then "+100" thumps in. Bigger per step. */
   private async inkStreakSeal(at: Vec, step: number): Promise<Container> {
-    const r = 13 + 2.5 * step;
+    const r = 18 + 2.5 * step;
     const seal = new Container();
     seal.position.set(at.x, at.y);
     seal.rotation = rand(-0.22, -0.08);
     const g = new Graphics();
     const t = new Text({
-      text: '+1',
+      text: streakSealText(),
       style: {
         fontFamily: MARKER,
-        fontSize: 14 + 2.5 * step,
+        fontSize: 12 + 2 * step,
         fill: INK_STREAK,
         stroke: { color: INK_SHADOW, width: 3, join: 'round' },
         padding: 6,
@@ -1848,7 +1857,7 @@ export class GameBoard {
   }
 
   /**
-   * Streak payout after the verdict ink: each "+1" stamp thumps in chain order and a copy flies
+   * Streak payout after the verdict ink: each "+100" stamp thumps in chain order and a copy flies
    * into the hop counter, which ticks hops → total damage before the score stamp.
    */
   private async streakTally(stamps: Container[], token: number): Promise<void> {
@@ -1861,10 +1870,10 @@ export class GameBoard {
       const base = stamp.scale.x;
       void this.tween(160, (p) => stamp.scale.set(base * (1 + 0.3 * Math.sin(Math.PI * p))));
       const fly = new Text({
-        text: '+1',
+        text: streakSealText(),
         style: {
           fontFamily: MARKER,
-          fontSize: 22,
+          fontSize: 20,
           fill: INK_STREAK,
           stroke: { color: INK_SHADOW, width: 4, join: 'round' },
           padding: 8,
@@ -1886,7 +1895,7 @@ export class GameBoard {
       });
       fly.destroy();
       if (token !== this.animToken) return;
-      c.count += 1;
+      c.count += STREAK_BONUS;
       c.num.text = String(c.count);
       c.flash.text = c.num.text;
       c.num.tint = 0xffffff;

@@ -23,7 +23,7 @@ const linksEl = linksNode;
 
 const params = new URLSearchParams(window.location.search);
 const demoMode = params.has('demo');
-// ?score=hops scores like PvC (1 per hop + Streak) instead of printed card damage; streak demos imply it.
+// ?score=hops scores like PvC (100 per hop + Streak) instead of printed card damage; streak demos imply it.
 const hopScoring = params.get('score') === 'hops' || (params.get('demo') ?? '').startsWith('streak');
 
 // Tuning/capture hooks: ?slow=0.25 slow-mo; ?freeze=20 holds a hop 20 ms after contact
@@ -58,7 +58,7 @@ function demoReboundTypes(): CardType[] {
   return ['G', 'K', 'S', 'K', 'A'];
 }
 
-/** Full juggle: three streak hops in a row (4 hops + 3 streak = 7). */
+/** Full juggle: three streak hops in a row (4 hops + 3 streak = 700). */
 function demoStreakTypes(): CardType[] {
   return ['S', 'K', 'S', 'K', 'S'];
 }
