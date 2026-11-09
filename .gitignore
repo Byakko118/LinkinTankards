@@ -15,3 +15,6 @@ Desktop.ini
 $RECYCLE.BIN/
 *.swp
 *~
+
+test-results/
+

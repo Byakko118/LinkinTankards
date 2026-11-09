@@ -7,12 +7,20 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
+    target: 'es2022',
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
         pvc: resolve(__dirname, 'pvc.html'),
         tester: resolve(__dirname, 'tester.html'),
+        editor: resolve(__dirname, 'editor.html'),
+        editorDocs: resolve(__dirname, 'editor-docs.html'),
       },
     },
   },
+  // Prebundle CJS wasmoon so named/default interop works in the browser.
+  optimizeDeps: {
+    include: ['wasmoon'],
+  },
+  assetsInclude: ['**/*.wasm'],
 });

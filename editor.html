@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linkin' Tankards — Lua effect editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/editor/style.css" />
+  </head>
+  <body class="editor-page">
+    <div id="editor-app">
+      <header class="top">
+        <div class="top-row">
+          <h1>Lua effect editor</h1>
+          <nav class="nav">
+            <a class="nav-link" href="/">Gameplay</a>
+            <a class="nav-link" href="/pvc.html">PvC</a>
+            <a class="nav-link" href="/tester.html">Attacks</a>
+            <a class="nav-link" href="/editor-docs.html">Effect tutorials</a>
+          </nav>
+        </div>
+        <p class="tag tag-lead">
+          <code>fx</code> is the effects toolkit the game injects into your card script (not a Lua import) — read the board, add damage, deal HP, or block hits.
+        </p>
+        <p class="tag tag-sub">
+          Monaco + sandboxed Lua 5.4. SCORE → CLASH → APPLY on a mock ResolveView — not wired into live PvC resolve yet.
+        </p>
+      </header>
+
+      <div class="layout">
+        <section class="panel script-panel">
+          <div class="row toolbar">
+            <label>
+              Card
+              <select id="starter"></select>
+            </label>
+            <label>
+              Hooks
+              <input id="hooks" type="text" title="Comma-separated: score, clash" />
+            </label>
+            <button type="button" id="reset-script">Reset script</button>
+            <button type="button" id="toggle-docs" class="ghost">Docs</button>
+            <a class="nav-link toolbar-link" href="/editor-docs.html">Tutorials</a>
+            <button type="button" id="toggle-fullscreen" class="ghost" title="Fullscreen (F11)">Fullscreen</button>
+            <button type="button" id="run" class="primary">Run SCORE→CLASH→APPLY</button>
+          </div>
+          <div class="script-split" id="script-chrome">
+            <div class="monaco-wrap">
+              <div id="monaco-host" class="monaco-host" aria-label="Lua script editor"></div>
+            </div>
+            <aside id="docs-panel" class="docs-panel" aria-label="Effect API docs"></aside>
+          </div>
+        </section>
+
+        <section class="panel mock-panel">
+          <h2>Mock ResolveView</h2>
+          <div class="grid">
+            <label>
+              Self line (types; @ = this card)
+              <input id="self-line" type="text" />
+            </label>
+            <label>
+              Self unplayed
+              <input id="self-unplayed" type="text" />
+            </label>
+            <label>
+              Self draw faces
+              <input id="self-draw" type="text" />
+            </label>
+            <label>
+              Self discard faces
+              <input id="self-discard" type="text" />
+            </label>
+            <label>
+              Self HP
+              <input id="self-hp" type="number" value="2800" />
+            </label>
+            <label>
+              Line capacity
+              <input id="capacity" type="number" value="5" min="1" max="5" />
+            </label>
+            <label>
+              Enemy line
+              <input id="enemy-line" type="text" />
+            </label>
+            <label>
+              Enemy HP
+              <input id="enemy-hp" type="number" value="2800" />
+            </label>
+            <label class="check">
+              <input id="enemy-faces" type="checkbox" /> Reveal enemy faces (else counts only)
+            </label>
+          </div>
+          <p class="hint" id="scenario-hint"></p>
+        </section>
+
+        <section class="panel result-panel">
+          <h2>Result</h2>
+          <div id="status" class="status">Idle.</div>
+          <div class="channels" id="channels"></div>
+          <pre id="log" class="log"></pre>
+        </section>
+      </div>
+    </div>
+    <script type="module" src="/src/editor/main.ts"></script>
+  </body>
+</html>
