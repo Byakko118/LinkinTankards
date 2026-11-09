@@ -92,46 +92,6 @@ h2 {
   color: #f0d2a8;
 }
 
-.fx-welcome {
-  margin: 0 0 1rem;
-}
-
-.fx-welcome-inner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.85rem 1.25rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  background: rgba(34, 25, 16, 0.95);
-}
-
-.fx-welcome-inner p {
-  margin: 0;
-  flex: 1 1 18rem;
-  color: var(--muted);
-  line-height: 1.5;
-  font-size: 0.95rem;
-}
-
-.fx-welcome-inner strong {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.fx-welcome-inner code {
-  font-family: var(--mono);
-  font-size: 0.9em;
-  color: #f0d2a8;
-}
-
-.fx-welcome-inner button {
-  flex: 0 0 auto;
-  align-self: center;
-}
-
 .nav {
   display: flex;
   gap: 0.85rem;

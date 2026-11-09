@@ -3,17 +3,11 @@
 export const EFFECT_DOCS_HTML = `
 <h3>Start here</h3>
 <p class="docs-note">
-  <code>fx</code> is the <strong>effects host API</strong> the game injects into each card script.
-  You do not import it — the runtime binds <code>fx</code> before calling your hooks.
-</p>
-<p class="docs-note">
-  Prefer <strong>sugar helpers</strong> when you can:
+  Prefer <strong>sugar helpers</strong>:
   <code>fx.my_slot()</code>, <code>fx.line_cards()</code>, <code>fx.add_to_me(n)</code>,
   <code>fx.deal_to_enemy(n)</code>, <code>fx.block_me(n)</code>.
-  Dense paths like <code>local line, i = fx.self.line, fx.self.slot</code> still work.
-</p>
-<p class="docs-note">
-  <a href="/editor-docs.html">Full step-by-step tutorials →</a>
+  Dense <code>fx.self.*</code> paths still work.
+  <a href="/editor-docs.html">Tutorials →</a>
 </p>
 <ul>
   <li><code>on_score(fx)</code> — <strong>SCORE</strong>, after hop/streak, slot ascending. Most starters.</li>
