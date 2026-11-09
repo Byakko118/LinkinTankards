@@ -10,7 +10,6 @@
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <!-- Vite processes this link; keeps chrome styled even if the Lua module graph hiccups. -->
     <link rel="stylesheet" href="/src/editor/style.css" />
   </head>
   <body class="editor-page">
@@ -25,36 +24,39 @@
           </nav>
         </div>
         <p class="tag">
-          Sandbox for card scripts (Wasmoon Lua 5.4 + host <code>fx</code>). Runs SCORE → CLASH → APPLY on a mock
-          ResolveView — not wired into live PvC resolve yet.
+          Monaco + sandboxed Lua 5.4 (<code>fx</code> host API). SCORE → CLASH → APPLY on a mock ResolveView —
+          not wired into live PvC resolve yet.
         </p>
       </header>
 
       <div class="layout">
         <section class="panel script-panel">
-          <div class="row">
+          <div class="row toolbar">
             <label>
-              Starter
+              Card
               <select id="starter"></select>
             </label>
             <label>
               Hooks
-              <input id="hooks" type="text" readonly />
+              <input id="hooks" type="text" title="Comma-separated: score, clash" />
             </label>
             <button type="button" id="reset-script">Reset script</button>
+            <button type="button" id="toggle-docs" class="ghost">Docs</button>
             <button type="button" id="run" class="primary">Run SCORE→CLASH→APPLY</button>
           </div>
-          <label class="block">
-            Lua script
-            <textarea id="script" spellcheck="false" class="lua"></textarea>
-          </label>
+          <div class="script-split">
+            <div class="monaco-wrap">
+              <div id="monaco-host" class="monaco-host" aria-label="Lua script editor"></div>
+            </div>
+            <aside id="docs-panel" class="docs-panel" aria-label="Effect API docs"></aside>
+          </div>
         </section>
 
         <section class="panel mock-panel">
           <h2>Mock ResolveView</h2>
           <div class="grid">
             <label>
-              Self line (types, space-separated; @ = this card)
+              Self line (types; @ = this card)
               <input id="self-line" type="text" />
             </label>
             <label>

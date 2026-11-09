@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "monaco-editor": "^0.57.0",
     "pixi.js": "^8.8.1",
     "wasmoon": "^1.16.0"
   },

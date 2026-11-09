@@ -1,5 +1,22 @@
 import type { ScriptedCardDef } from './types';
 
+const BLANK_SCRIPT = `-- hooks: score
+-- Blank card skeleton — start here for a new effect.
+-- Add "clash" to the hooks line when you implement on_clash.
+
+function on_score(fx)
+  -- Reads: fx.self / fx.enemy (.line .hand .unplayed .draw .discard .hp .slot .chain)
+  -- Writes: fx.add(card_or_self, amount, "effect")
+  --         fx.deal(fx.enemy.hp, amount, "effect", fx.self)
+  local _ = fx.self.slot
+end
+
+-- function on_clash(fx)
+--   -- Reads: fx.outgoing(enemy_card)
+--   -- Writes: fx.block_slot(slot, amount)
+-- end
+`;
+
 const THUNDERER_SCRIPT = `-- hooks: score
 function on_score(fx)
   local line, i = fx.self.line, fx.self.slot
@@ -54,6 +71,14 @@ end
 `;
 
 export const STARTER_CARDS: readonly ScriptedCardDef[] = [
+  {
+    id: 'blank',
+    type: 'G',
+    name: 'Default (blank)',
+    damage: 0,
+    hooks: ['score'],
+    script: BLANK_SCRIPT,
+  },
   {
     id: 'thunderer',
     type: 'K',

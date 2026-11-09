@@ -3,6 +3,8 @@ import { STARTER_CARDS, starterById } from '../game/effect/starters';
 import type { MockResolveInput, ResolveRunResult, ScriptedCardDef } from '../game/effect/types';
 import type { CardType } from '../game/rules';
 import { STARTING_HP } from '../game/hopDamage';
+import { mountDocsPanel } from './docsPanel';
+import { KeyCode, KeyMod, createLuaEditor } from './monacoSetup';
 
 const TYPES = new Set(['G', 'A', 'S', 'K']);
 
@@ -17,8 +19,18 @@ interface Scenario {
   enemyFaces: boolean;
 }
 
-/** Default mocks that exercise each starter. `@` marks the edited card's seat. */
+/** Default mocks. `@` marks the edited card's seat. */
 const SCENARIOS: Record<string, Scenario> = {
+  blank: {
+    hint: 'Blank template on a single G — safe canvas for new effects.',
+    selfLine: '@',
+    selfUnplayed: 'A S K',
+    selfDraw: 'G',
+    selfDiscard: '',
+    enemyLine: '',
+    capacity: 5,
+    enemyFaces: false,
+  },
   thunderer: {
     hint: 'S→K→S triple with Thunderer as the middle K — expects +100 effect.',
     selfLine: 'S @ S',
@@ -79,8 +91,10 @@ function requireEl<T extends HTMLElement>(id: string): T {
 
 const starterEl = requireEl<HTMLSelectElement>('starter');
 const hooksEl = requireEl<HTMLInputElement>('hooks');
-const scriptEl = requireEl<HTMLTextAreaElement>('script');
+const monacoHost = requireEl<HTMLDivElement>('monaco-host');
+const docsPanel = requireEl<HTMLElement>('docs-panel');
 const resetEl = requireEl<HTMLButtonElement>('reset-script');
+const toggleDocsEl = requireEl<HTMLButtonElement>('toggle-docs');
 const runEl = requireEl<HTMLButtonElement>('run');
 const statusEl = requireEl<HTMLDivElement>('status');
 const channelsEl = requireEl<HTMLDivElement>('channels');
@@ -97,8 +111,17 @@ const enemyLineEl = requireEl<HTMLInputElement>('enemy-line');
 const enemyHpEl = requireEl<HTMLInputElement>('enemy-hp');
 const enemyFacesEl = requireEl<HTMLInputElement>('enemy-faces');
 
+mountDocsPanel(docsPanel);
+
+const blank = starterById('blank') ?? STARTER_CARDS[0];
+const editor = createLuaEditor(monacoHost, blank.script);
+
+function scriptValue(): string {
+  return editor.getValue();
+}
+
 function currentStarter(): ScriptedCardDef {
-  return starterById(starterEl.value) ?? STARTER_CARDS[0];
+  return starterById(starterEl.value) ?? blank;
 }
 
 function parseTypes(raw: string): CardType[] {
@@ -109,36 +132,44 @@ function parseTypes(raw: string): CardType[] {
     .filter((t) => TYPES.has(t)) as CardType[];
 }
 
-/** Parse line tokens; `@` becomes the scripted card. Returns line + 1-based slot. */
+function parseHooks(raw: string, fallback: ScriptedCardDef['hooks']): ScriptedCardDef['hooks'] {
+  const hooks = raw
+    .split(/[,\s]+/)
+    .map((h) => h.trim())
+    .filter(Boolean) as ScriptedCardDef['hooks'];
+  return hooks.length ? hooks : [...fallback];
+}
+
+/** Parse line tokens; `@` becomes the scripted card. */
 function parseSelfLine(
   raw: string,
   card: ScriptedCardDef,
 ): { line: Array<CardType | ScriptedCardDef>; slot: number } {
   const tokens = raw.trim().split(/[\s,]+/).filter(Boolean);
   if (tokens.length === 0) {
-    return { line: [{ ...card, script: scriptEl.value }], slot: 1 };
+    return { line: [{ ...card, script: scriptValue() }], slot: 1 };
   }
   const line: Array<CardType | ScriptedCardDef> = [];
   let slot = -1;
   for (const tok of tokens) {
     if (tok === '@') {
       slot = line.length + 1;
-      line.push({ ...card, script: scriptEl.value });
+      line.push({ ...card, script: scriptValue() });
     } else if (TYPES.has(tok)) {
       line.push(tok as CardType);
     }
   }
   if (slot < 0) {
-    line.push({ ...card, script: scriptEl.value });
+    line.push({ ...card, script: scriptValue() });
     slot = line.length;
   }
   return { line, slot };
 }
 
 function loadScenario(id: string): void {
-  const card = starterById(id) ?? STARTER_CARDS[0];
-  const sc = SCENARIOS[id] ?? SCENARIOS.thunderer;
-  scriptEl.value = card.script;
+  const card = starterById(id) ?? blank;
+  const sc = SCENARIOS[id] ?? SCENARIOS.blank;
+  editor.setValue(card.script);
   hooksEl.value = card.hooks.join(', ');
   selfLineEl.value = sc.selfLine;
   selfUnplayedEl.value = sc.selfUnplayed;
@@ -150,6 +181,7 @@ function loadScenario(id: string): void {
   selfHpEl.value = String(STARTING_HP);
   enemyHpEl.value = String(STARTING_HP);
   hintEl.textContent = sc.hint;
+  editor.focus();
 }
 
 function txt(v: unknown, fallback = '—'): string {
@@ -180,20 +212,10 @@ function renderResult(result: ResolveRunResult): void {
   }
   const selfBlocks = result.selfBlocks ?? [];
   if (selfBlocks.some((b) => b > 0)) {
-    parts.push(
-      row(
-        'blocks',
-        selfBlocks.map((b, i) => `s${i + 1}:${b}`).join(' '),
-      ),
-    );
+    parts.push(row('blocks', selfBlocks.map((b, i) => `s${i + 1}:${b}`).join(' ')));
   }
   parts.push(row('deals→enemy', txt(result.dealsToEnemy, '0')));
-  parts.push(
-    row(
-      'HP',
-      `self ${txt(result.selfHpAfter)} / enemy ${txt(result.enemyHpAfter)}`,
-    ),
-  );
+  parts.push(row('HP', `self ${txt(result.selfHpAfter)} / enemy ${txt(result.enemyHpAfter)}`));
   if ((result.enemyCards ?? []).length) {
     parts.push(row('Enemy', ''));
     for (const c of result.enemyCards) {
@@ -208,13 +230,9 @@ async function run(): Promise<void> {
   const card = currentStarter();
   const edited: ScriptedCardDef = {
     ...card,
-    script: scriptEl.value,
-    hooks: hooksEl.value
-      .split(/[,\s]+/)
-      .map((h) => h.trim())
-      .filter(Boolean) as ScriptedCardDef['hooks'],
+    script: scriptValue(),
+    hooks: parseHooks(hooksEl.value, card.hooks),
   };
-  if (!edited.hooks.length) edited.hooks = [...card.hooks];
 
   const { line, slot } = parseSelfLine(selfLineEl.value, edited);
   const input: MockResolveInput = {
@@ -241,7 +259,6 @@ async function run(): Promise<void> {
   channelsEl.innerHTML = '';
 
   try {
-    // Dynamic import keeps the chrome/CSS boot independent of Wasmoon CJS interop.
     const { runMockResolve } = await import('../game/effect/runResolve');
     const result = await runMockResolve(input, {
       editorCard: { slot, def: edited },
@@ -266,15 +283,15 @@ for (const c of STARTER_CARDS) {
 starterEl.addEventListener('change', () => loadScenario(starterEl.value));
 resetEl.addEventListener('click', () => loadScenario(starterEl.value));
 runEl.addEventListener('click', () => void run());
-
-scriptEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const start = scriptEl.selectionStart;
-    const end = scriptEl.selectionEnd;
-    scriptEl.value = `${scriptEl.value.slice(0, start)}  ${scriptEl.value.slice(end)}`;
-    scriptEl.selectionStart = scriptEl.selectionEnd = start + 2;
-  }
+toggleDocsEl.addEventListener('click', () => {
+  document.body.classList.toggle('docs-collapsed');
+  // Monaco automaticLayout picks up size change on next frame
+  requestAnimationFrame(() => editor.layout());
 });
 
-loadScenario(STARTER_CARDS[0].id);
+editor.addCommand(KeyMod.CtrlCmd | KeyCode.Enter, () => {
+  void run();
+});
+
+loadScenario('blank');
+starterEl.value = 'blank';
