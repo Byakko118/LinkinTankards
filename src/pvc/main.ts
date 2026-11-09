@@ -2,7 +2,14 @@ import '../style.css';
 import './pvc.css';
 import { BoardPhase, GameBoard } from '../game/board';
 import { AiDifficulty, SLIP_RATE, STREAK_MISS_RATE, planAiLine } from '../game/ai';
-import { BREAK_RECOIL, DAMAGE_UNIT, LOW_HP, STARTING_HP, hopDamageFromLinks } from '../game/hopDamage';
+import {
+  BREAK_RECOIL,
+  DAMAGE_UNIT,
+  LOW_HP,
+  MAX_COMBO_DAMAGE,
+  STARTING_HP,
+  hopDamageFromLinks,
+} from '../game/hopDamage';
 import { evaluateLinks } from '../game/rules';
 import { SeededRng } from '../game/rng';
 import { HAND_SIZE, TavernPile } from '../game/tavernDeck';
@@ -103,6 +110,7 @@ function setHpInstant(side: Side, hp: number): void {
   shownHp[side] = hp;
   hpEls[side].textContent = String(hp);
   el.classList.add('no-anim');
+  el.style.setProperty('--chunk', `${(LOW_HP / START_HP) * 100}%`);
   el.style.setProperty('--hp', String(hp / START_HP));
   el.classList.remove('hit', 'recoil', 'ko');
   el.classList.toggle('low', hp > 0 && hp <= LOW_HP);
@@ -110,15 +118,23 @@ function setHpInstant(side: Side, hp: number): void {
   el.classList.remove('no-anim');
 }
 
+/** Pop weight by hit size; the 700 max combo gets its own tier. */
+function popTier(amount: number): 'small' | 'mid' | 'big' | 'max' {
+  if (amount >= MAX_COMBO_DAMAGE) return 'max';
+  if (amount >= 5 * DAMAGE_UNIT) return 'big';
+  if (amount >= 3 * DAMAGE_UNIT) return 'mid';
+  return 'small';
+}
+
 function popDelta(side: Side, amount: number, kind: 'hit' | 'recoil'): void {
   const pop = document.createElement('span');
-  pop.className = `hp-pop ${kind}`;
+  pop.className = kind === 'recoil' ? 'hp-pop recoil' : `hp-pop hit ${popTier(amount)}`;
   pop.textContent = kind === 'recoil' ? `−${amount} recoil` : `−${amount}`;
   fighterEls[side].querySelector('.hp-pops')!.appendChild(pop);
   pop.addEventListener('animationend', () => pop.remove());
 }
 
-/** Bar drops at once (white ghost trails it); the number counts down in DAMAGE_UNIT steps. */
+/** Bar drops at once (white ghost trails it); the number counts down in DAMAGE_UNIT steps and lands. */
 async function animateHp(side: Side, to: number, kind: 'hit' | 'recoil'): Promise<void> {
   const el = fighterEls[side];
   const from = shownHp[side];
@@ -126,19 +142,25 @@ async function animateHp(side: Side, to: number, kind: 'hit' | 'recoil'): Promis
     setHpInstant(side, to);
     return;
   }
+  const weight = Math.min(1, (from - to) / MAX_COMBO_DAMAGE);
   popDelta(side, from - to, kind);
+  el.style.setProperty('--hit-amp', `${kind === 'recoil' ? 3 : Math.round(4 + 8 * weight)}px`);
   restartClass(el, kind);
   el.style.setProperty('--hp', String(to / START_HP));
-  // Same tick count as the old 1-HP scale: one tick per DAMAGE_UNIT.
+  // One tick per DAMAGE_UNIT; big hits tick faster so a 700 drains in about the same beat as a 300.
+  const ticks = (from - to) / DAMAGE_UNIT;
+  const per = fastForward ? 35 : Math.round(Math.min(90, Math.max(55, 560 / ticks)));
   for (let hp = from - DAMAGE_UNIT; hp > to; hp -= DAMAGE_UNIT) {
-    await wait(fastForward ? 35 : 85);
+    await wait(per);
     shownHp[side] = hp;
     hpEls[side].textContent = String(hp);
     restartClass(hpEls[side], 'tick');
   }
+  await wait(per);
   shownHp[side] = to;
   hpEls[side].textContent = String(to);
-  restartClass(hpEls[side], 'tick');
+  hpEls[side].classList.remove('tick');
+  restartClass(hpEls[side], 'land');
   el.classList.toggle('low', to > 0 && to <= LOW_HP);
   el.classList.toggle('ko', to <= 0);
   window.setTimeout(() => el.classList.remove(kind), 260);

@@ -18,12 +18,14 @@ import {
 import {
   BREAK_RECOIL,
   HOP_DAMAGE,
+  MAX_COMBO_DAMAGE,
   MAX_LINE,
   STREAK_BONUS,
   comboDamageFromLinks,
   streakSealText,
   streakSteps,
 } from './hopDamage';
+import { RollingNumber } from './rollingNumber';
 import { HAND_SIZE } from './tavernDeck';
 
 const W = 960;
@@ -39,9 +41,10 @@ const MAX_SLOTS = MAX_LINE;
 const CARD_BOUNDS = new Rectangle(-CARD_W / 2 - 1.5, -CARD_H / 2 - 1.5, CARD_W + 3, CARD_H + 3);
 const DECK_AT = { x: W + 70, y: HAND_Y - 46 };
 const DISCARD_AT = { x: -90, y: HAND_Y - 30 };
-const COMBO_AT = { x: W - 74, y: 46 };
+/** Inset so the hot, punched 700 and its streak burst stay on canvas. */
+const COMBO_AT = { x: W - 92, y: 54 };
 /** Hand tray is empty or sunk during resolve, so the total never covers the line or GM notes. */
-const STAMP_AT = { x: W / 2, y: HAND_Y - 10 };
+const STAMP_AT = { x: W / 2, y: HAND_Y - 18 };
 
 const MARKER = '"Permanent Marker", "Bebas Neue", Impact, sans-serif';
 const INK_OK = 0x63c98f;
@@ -50,7 +53,17 @@ const INK_NOTE = 0xf3c7b8;
 const INK_SHADOW = 0x0b0705;
 const INK_STREAK = 0xf5c84c;
 const GOLD = 0xf0c36a;
+/** The DAMAGE total burns from gold toward this as it climbs to MAX_COMBO_DAMAGE. */
+const GOLD_HOT = 0xfff1c8;
 const DIM_TINT = 0x958a7f;
+
+/**
+ * Number lanes that feed the DAMAGE tally, each with its own ink so the reader can tell where points came
+ * from: white hop contacts, gold Streak seals. 'mult' is reserved for a future Mult channel: it multiplies
+ * instead of adding and reads in its own ×N slot beside the total, never through the additive lanes.
+ */
+export type TallyLane = 'hop' | 'streak' | 'mult';
+const LANE_INK: Record<TallyLane, number> = { hop: 0xffffff, streak: INK_STREAK, mult: 0xff6f9c };
 
 const LANE_PATH: Record<CardType, string> = {
   G: 'ground → ground',
@@ -227,6 +240,13 @@ interface CardView {
 
 type ChromeFx = (t: number, g: Graphics) => boolean;
 
+/** A Streak seal written by the GM pen; its value lifts off into the tally after the verdict. */
+interface StreakSeal {
+  node: Container;
+  value: Text;
+  step: number;
+}
+
 /** Ink path between two play cards: quadratic bezier plus a stable hand wobble. */
 interface InkPath {
   p0: Vec;
@@ -303,11 +323,18 @@ export class GameBoard {
   private combo!: {
     node: Container;
     body: Container;
-    num: Text;
-    flash: Text;
+    num: RollingNumber;
     label: Text;
+    /** Reserved ×N slot for the Mult lane; hidden until something multiplies. */
+    mult: Text;
     count: number;
+    /** Tally beats this resolve; alternates the punch tilt. */
+    beat: number;
     punch: number;
+    /** Punch strength for the current beat (bigger streak steps hit harder). */
+    punchAmp: number;
+    /** Held white-gold shimmer under the punch flash (jackpot hold). */
+    shimmer: number;
     shake: number;
   };
 
@@ -1404,7 +1431,7 @@ export class GameBoard {
       onContact: () => {
         if (isBreak) {
           this.combo.shake = 1;
-          this.combo.num.tint = DIM_TINT;
+          this.combo.num.color = DIM_TINT;
           return;
         }
         target.tint = 0xffffff;
@@ -1434,117 +1461,234 @@ export class GameBoard {
   private buildCombo(): void {
     const node = new Container();
     const body = new Container();
-    const numStyle = {
-      fontFamily: 'Bebas Neue, Impact, sans-serif',
-      fontSize: 52,
-      fill: GOLD,
-      dropShadow: { color: 0x000000, blur: 6, distance: 3, alpha: 0.55 },
-    };
-    const num = new Text({ text: '0', style: numStyle, resolution: 3 });
-    num.anchor.set(0.5);
-    const flash = new Text({ text: '0', style: { ...numStyle, fill: 0xffffff, dropShadow: false }, resolution: 3 });
-    flash.anchor.set(0.5);
-    flash.alpha = 0;
+    const num = new RollingNumber(
+      {
+        fontFamily: 'Bebas Neue, Impact, sans-serif',
+        fontSize: 52,
+        dropShadow: { color: 0x000000, blur: 6, distance: 3, alpha: 0.55 },
+      },
+      GOLD,
+    );
     const label = new Text({
-      text: 'HOPS',
+      text: 'DAMAGE',
       style: {
         fontFamily: 'Source Sans 3, sans-serif',
         fontSize: 12,
         fontWeight: '700',
         letterSpacing: 3,
         fill: 0xc9b896,
+        dropShadow: { color: 0x000000, blur: 3, distance: 1, alpha: 0.6 },
       },
       resolution: 3,
     });
     label.anchor.set(0.5);
-    label.position.set(2, 30);
-    body.addChild(num, flash, label);
+    label.position.set(2, 32);
+    const mult = new Text({
+      text: '',
+      style: {
+        fontFamily: 'Bebas Neue, Impact, sans-serif',
+        fontSize: 30,
+        fill: 0xffffff,
+        stroke: { color: INK_SHADOW, width: 4, join: 'round' },
+        padding: 6,
+      },
+      resolution: 3,
+    });
+    mult.anchor.set(0, 0.5);
+    mult.tint = LANE_INK.mult;
+    mult.visible = false;
+    body.addChild(num, label, mult);
     node.addChild(body);
     node.visible = false;
     this.hudLayer.addChild(node);
-    this.combo = { node, body, num, flash, label, count: 0, punch: 0, shake: 0 };
+    this.combo = { node, body, num, label, mult, count: 0, beat: 0, punch: 0, punchAmp: 1, shimmer: 0, shake: 0 };
   }
 
   private hideCombo(): void {
     const c = this.combo;
     if (!c) return;
     c.node.visible = false;
+    c.node.children.filter((ch) => ch !== c.body).forEach((ch) => ch.destroy({ children: true }));
     c.count = 0;
+    c.beat = 0;
     c.punch = 0;
+    c.punchAmp = 1;
+    c.shimmer = 0;
     c.shake = 0;
+    c.mult.visible = false;
+    c.node.rotation = 0;
+    c.num.reset('');
   }
 
   /** Hop counter punches on every contact frame (HOP_DAMAGE per legal hop). */
   private comboHit(): void {
     const c = this.combo;
-    c.count += this.scoring === 'hops' ? HOP_DAMAGE : 1;
     if (!c.node.visible) {
       c.node.visible = true;
       c.node.alpha = 1;
       c.node.position.set(COMBO_AT.x, COMBO_AT.y);
       c.node.scale.set(1);
-      c.num.tint = 0xffffff;
+      c.num.reset('');
     }
-    c.num.text = String(c.count);
-    c.flash.text = c.num.text;
-    c.label.text = c.count === HOP_DAMAGE || c.count === 1 ? 'HOP' : 'HOPS';
+    this.tallyAdd('hop', this.scoring === 'hops' ? HOP_DAMAGE : 1);
+  }
+
+  /** Total burns from gold toward white-gold as it climbs to the max combo. */
+  private tallyHeat(total: number): number {
+    if (this.scoring !== 'hops') return GOLD;
+    return lerpColor(GOLD, GOLD_HOT, clamp(total / MAX_COMBO_DAMAGE, 0, 1) ** 1.5);
+  }
+
+  /** One additive lane lands in the DAMAGE tally: only the wheels that change roll, and the counter punches by `weight`. */
+  private tallyAdd(lane: Exclude<TallyLane, 'mult'>, amount: number, weight = 1): void {
+    const c = this.combo;
+    c.count += amount;
+    c.beat += 1;
+    c.num.set(String(c.count));
+    c.num.color = this.tallyHeat(c.count);
+    c.label.text = this.scoring === 'hops' ? 'DAMAGE' : c.count === 1 ? 'HOP' : 'HOPS';
     c.punch = 1;
+    c.punchAmp = weight;
+    if (lane === 'hop' && this.scoring === 'hops') this.laneChip(lane, `+${amount}`);
+  }
+
+  /**
+   * Mult-lane hook for a future Mult channel (no gameplay calls it yet): scales the running total during a
+   * resolve and shows ×N in its own slot beside the number, in the Mult ink rather than the additive lanes'.
+   */
+  tallyMultiply(factor: number): void {
+    const c = this.combo;
+    if (!c.node.visible || factor === 1) return;
+    c.count = Math.round(c.count * factor);
+    c.beat += 1;
+    c.num.set(String(c.count));
+    c.num.color = this.tallyHeat(c.count);
+    c.mult.text = `×${factor}`;
+    c.mult.visible = true;
+    c.mult.position.set(c.num.width / 2 + 8, -4);
+    c.punch = 1;
+    c.punchAmp = 1.4;
+  }
+
+  /** "+100" kicked off the counter in the lane's ink as its points land. */
+  private laneChip(lane: TallyLane, text: string): void {
+    const c = this.combo;
+    const chip = new Text({
+      text,
+      style: {
+        fontFamily: 'Bebas Neue, Impact, sans-serif',
+        fontSize: 24,
+        fill: 0xffffff,
+        stroke: { color: INK_SHADOW, width: 4, join: 'round' },
+        padding: 6,
+      },
+      resolution: 2,
+    });
+    chip.tint = LANE_INK[lane];
+    chip.anchor.set(1, 0.5);
+    const x0 = c.node.x - c.num.width / 2 - 6;
+    const y0 = c.node.y + 6;
+    this.hudLayer.addChild(chip);
+    void this.tween(560, (p) => {
+      if (chip.destroyed) return;
+      const e = ease.outCubic(p);
+      chip.position.set(x0 - 22 * e, y0 - 26 * e);
+      chip.scale.set(lerp(1.6, 1, ease.outBack(Math.min(1, p * 3))));
+      chip.alpha = p < 0.55 ? 1 : 1 - (p - 0.55) / 0.45;
+    }).then(() => chip.destroy());
   }
 
   private stepCombo(dt: number): void {
     const c = this.combo;
     if (!c.node.visible) return;
-    c.punch = Math.max(0, c.punch - dt / 190);
+    c.punch = Math.max(0, c.punch - dt / 210);
     c.shake = Math.max(0, c.shake - dt / 260);
     const p = c.punch * c.punch;
-    c.body.scale.set(1 + 0.5 * p);
-    c.body.rotation = 0.12 * p * (c.count % 2 ? 1 : -1);
-    c.flash.alpha = p;
+    const heat = this.scoring === 'hops' ? clamp(c.count / MAX_COMBO_DAMAGE, 0, 1) : 0;
+    c.body.scale.set((1 + 0.14 * heat) * (1 + 0.45 * c.punchAmp * p));
+    c.body.rotation = 0.1 * c.punchAmp * p * (c.beat % 2 ? 1 : -1);
     c.body.x = Math.sin(this.clock / 18) * 6 * c.shake;
+    c.num.flash = Math.max(p, c.shimmer);
+    c.num.update(dt);
   }
 
-  /** The hop counter flies to center and becomes the turn total. */
+  /** Camera-style shake of the whole board; the stamp and seals use it to land with weight. */
+  private shakeBoard(amp: number, ms: number): void {
+    if (amp <= 0) return;
+    window.clearTimeout(this.nudgeTimer);
+    void this.tween(ms, (p) => {
+      const k = amp * (1 - p) ** 2;
+      this.root.position.set(Math.sin(p * 47) * k, Math.cos(p * 39) * k * 0.6);
+    }).then(() => this.root.position.set(0, 0));
+  }
+
+  /**
+   * The tally tucks in, is thrown to center and slams down as the turn total. Size, flash, rings and board
+   * shake scale with damage; the 700 max combo gets the jackpot (triple ring, MAX COMBO tag, longer shimmer).
+   */
   private async scoreStamp(damage: number, damageMode: ResolveDamageMode, token: number): Promise<void> {
     if (token !== this.animToken) return;
     const c = this.combo;
-    const text = damageMode === 'hops' ? (damage === 0 ? '0' : `+${damage}`) : `+${damage}`;
-    const label = 'DAMAGE';
+    const hops = damageMode === 'hops';
+    const text = hops && damage === 0 ? '0' : `+${damage}`;
+    const tier = damage === 0 ? 0 : hops ? clamp(damage / MAX_COMBO_DAMAGE, 0, 1) : 0.5;
+    const jackpot = hops && damage >= MAX_COMBO_DAMAGE;
+    const size = damage === 0 ? 1.3 : lerp(1.45, 2.05, tier);
+    const air = size * 1.22;
+
     if (c.node.visible) {
+      const s0 = c.node.scale.x;
+      await this.tween(90, (p) => c.node.scale.set(s0 * (1 - 0.14 * ease.outQuad(p))));
+      if (token !== this.animToken) return;
       const from = { x: c.node.x, y: c.node.y };
+      const s1 = c.node.scale.x;
       await this.tween(240, (p) => {
         const e = ease.inOutCubic(p);
-        c.node.position.set(lerp(from.x, STAMP_AT.x, e), lerp(from.y, STAMP_AT.y, e) - Math.sin(Math.PI * e) * 24);
-        c.node.scale.set(lerp(1, 1.55, e));
+        c.node.position.set(lerp(from.x, STAMP_AT.x, e), lerp(from.y, STAMP_AT.y, e) - Math.sin(Math.PI * e) * 40);
+        c.node.scale.set(lerp(s1, air, ease.outQuad(p)));
+        c.node.rotation = -0.12 * Math.sin(Math.PI * e);
       });
     } else {
       c.node.visible = true;
       c.node.position.set(STAMP_AT.x, STAMP_AT.y);
+      c.node.rotation = 0;
       c.node.alpha = 0;
-      await this.tween(160, (p) => {
+      c.num.reset(text);
+      await this.tween(140, (p) => {
         c.node.alpha = p;
-        c.node.scale.set(lerp(0.5, 1.55, ease.outBack(p)));
+        c.node.scale.set(lerp(air * 1.2, air, p));
       });
     }
     if (token !== this.animToken) return;
-    c.num.text = text;
-    c.flash.text = text;
-    c.label.text = label;
-    c.num.tint = damage === 0 ? DIM_TINT : 0xffffff;
+
+    // Slam: squash flat on contact, then recover with overshoot.
+    await this.tween(70, (p) => {
+      const e = ease.inCubic(p);
+      c.node.scale.set(lerp(air, size * 1.1, e), lerp(air, size * 0.8, e));
+      c.node.rotation = lerp(c.node.rotation, 0, e);
+    });
+    if (token !== this.animToken) return;
+    c.num.set(text);
+    c.num.color = damage === 0 ? DIM_TINT : jackpot ? GOLD_HOT : this.tallyHeat(damage);
+    c.label.text = 'DAMAGE';
     c.shake = 0;
     c.punch = 1;
-
-    const burst = new Graphics();
-    this.hudLayer.addChildAt(burst, 0);
-    const ring = this.tween(420, (p) => {
-      const e = ease.outCubic(p);
-      burst.clear();
-      if (damage === 0) return;
-      burst.circle(STAMP_AT.x, STAMP_AT.y, 24 + e * 130).stroke({ width: 4 * (1 - e) + 0.5, color: GOLD, alpha: 1 - e });
-      burst.circle(STAMP_AT.x, STAMP_AT.y, 12 + e * 70).fill({ color: GOLD, alpha: 0.18 * (1 - e) });
+    c.punchAmp = damage === 0 ? 0.2 : 0.35 + 0.4 * tier;
+    const impact = damage > 0 ? this.stampImpact(tier, jackpot) : Promise.resolve();
+    this.shakeBoard(damage === 0 ? 0 : 2 + 8 * tier, 240 + 160 * tier);
+    if (jackpot) void this.stampMaxTag();
+    await this.tween(240, (p) => {
+      const e = ease.outBack(p);
+      c.node.scale.set(lerp(size * 1.1, size, e), lerp(size * 0.8, size, e));
     });
-    await this.wait(560);
-    await ring;
-    burst.destroy();
+
+    const hold = jackpot ? 1000 : 480 + 260 * tier;
+    const t0 = performance.now();
+    await this.tween(hold, (p) => {
+      if (jackpot) c.shimmer = (0.25 + 0.3 * Math.sin((performance.now() - t0) / 65)) * (1 - p * p);
+    });
+    c.shimmer = 0;
+    await impact;
     if (token !== this.animToken) return;
     const y0 = c.node.y;
     await this.tween(260, (p) => {
@@ -1552,6 +1696,62 @@ export class GameBoard {
       c.node.y = y0 - 18 * p;
     });
     this.hideCombo();
+  }
+
+  /** White contact flash under the stamp, then gold rings (one per weight tier, three on the jackpot). */
+  private async stampImpact(tier: number, jackpot: boolean): Promise<void> {
+    const g = new Graphics();
+    this.hudLayer.addChildAt(g, 0);
+    const rings = jackpot ? 3 : tier >= 0.55 ? 2 : 1;
+    const reach = 110 + 70 * tier;
+    const life = 460 + 120 * tier;
+    const total = life + 110 * (rings - 1);
+    await this.tween(total, (p) => {
+      const ms = p * total;
+      g.clear();
+      const f = clamp(ms / 150, 0, 1);
+      if (f < 1) {
+        const e = ease.outCubic(f);
+        g.ellipse(STAMP_AT.x, STAMP_AT.y, 50 + (40 + 40 * tier) * e, 28 + (20 + 20 * tier) * e)
+          .fill({ color: 0xffffff, alpha: (0.7 + 0.25 * tier) * (1 - f) ** 3 });
+      }
+      for (let i = 0; i < rings; i++) {
+        const k = clamp((ms - i * 110) / life, 0, 1);
+        if (k <= 0 || k >= 1) continue;
+        const e = ease.outCubic(k);
+        const r = 30 + e * reach * (1 - 0.18 * i);
+        g.circle(STAMP_AT.x, STAMP_AT.y, r).stroke({ width: (5 + 3 * tier) * (1 - e) + 0.5, color: GOLD, alpha: 1 - e });
+        if (i === 0) g.circle(STAMP_AT.x, STAMP_AT.y, 16 + e * reach * 0.55).fill({ color: GOLD, alpha: 0.2 * (1 - e) });
+      }
+    });
+    g.destroy();
+  }
+
+  /** Jackpot ink tag stamped above the 700. */
+  private async stampMaxTag(): Promise<void> {
+    const c = this.combo;
+    const tag = new Text({
+      text: 'MAX COMBO',
+      style: {
+        fontFamily: MARKER,
+        fontSize: 15,
+        fill: INK_STREAK,
+        stroke: { color: INK_SHADOW, width: 4, join: 'round' },
+        padding: 6,
+      },
+      resolution: 3,
+    });
+    tag.anchor.set(0.5);
+    tag.position.set(0, -42);
+    tag.rotation = -0.1;
+    tag.alpha = 0;
+    c.node.addChild(tag);
+    await this.wait(90);
+    await this.tween(200, (p) => {
+      if (tag.destroyed) return;
+      tag.alpha = Math.min(1, p * 3);
+      tag.scale.set(lerp(2.2, 1, ease.outBack(p)));
+    });
   }
 
   private async recoilBurst(token: number): Promise<void> {
@@ -1681,20 +1881,25 @@ export class GameBoard {
     return word;
   }
 
-  /** Streak seal pressed onto the middle of an OK link: the pen rings it, then "+100" thumps in. Bigger per step. */
-  private async inkStreakSeal(at: Vec, step: number): Promise<Container> {
-    const r = 18 + 2.5 * step;
+  /**
+   * Streak seal pressed onto the middle of an OK link like wax: the pen rings the disc, then "+100" slams in
+   * and the seal squashes under it. Each step is heavier: bigger and thicker, a 2nd inner ring from step 2,
+   * a gold halo and a board knock on step 3.
+   */
+  private async inkStreakSeal(at: Vec, step: number): Promise<StreakSeal> {
+    const r = 18 + 3 * step;
     const seal = new Container();
     seal.position.set(at.x, at.y);
     seal.rotation = rand(-0.22, -0.08);
     const g = new Graphics();
+    const press = new Graphics();
     const t = new Text({
       text: streakSealText(),
       style: {
         fontFamily: MARKER,
-        fontSize: 12 + 2 * step,
+        fontSize: 12 + 2.5 * step,
         fill: INK_STREAK,
-        stroke: { color: INK_SHADOW, width: 3, join: 'round' },
+        stroke: { color: INK_SHADOW, width: 3 + 0.5 * step, join: 'round' },
         padding: 6,
       },
       resolution: 2,
@@ -1702,24 +1907,35 @@ export class GameBoard {
     t.anchor.set(0.5);
     t.position.set(-1, 1);
     t.alpha = 0;
-    seal.addChild(g, t);
+    seal.addChild(press, g, t);
     this.inkLayer.addChild(seal);
     const a0 = -Math.PI * 0.6;
+    const ringW = 2.5 + 0.75 * step;
     await this.tween(150, (p) => {
       const e = ease.inOutQuad(p);
       g.clear();
+      if (step >= 3) g.circle(0, 0, r + 7).fill({ color: INK_STREAK, alpha: 0.16 * e });
       g.circle(1.5, 2.5, r + 1).fill({ color: INK_SHADOW, alpha: 0.55 * e });
       g.circle(0, 0, r).fill({ color: INK_SHADOW, alpha: 0.88 * e });
       if (e > 0.01) {
         g.moveTo(Math.cos(a0) * (r - 1), Math.sin(a0) * (r - 1))
-          .arc(0, 0, r - 1, a0, a0 + Math.PI * 2.15 * e).stroke({ color: INK_STREAK, width: 3, alpha: 0.95, cap: 'round' });
+          .arc(0, 0, r - 1, a0, a0 + Math.PI * 2.15 * e).stroke({ color: INK_STREAK, width: ringW, alpha: 0.95, cap: 'round' });
       }
+      if (step >= 2 && e > 0.5) g.circle(0, 0, r - 4 - ringW / 2).stroke({ color: INK_STREAK, width: 1.2, alpha: 0.55 * (e - 0.5) * 2 });
     });
-    await this.tween(120, (p) => {
-      t.alpha = Math.min(1, p * 2.5);
-      t.scale.set(lerp(1.7, 1, ease.outBack(p)));
+    await this.tween(110, (p) => {
+      t.alpha = Math.min(1, p * 3);
+      t.scale.set(lerp(2.1, 1, ease.inCubic(p)));
     });
-    return seal;
+    if (step >= 3) this.shakeBoard(2.2, 150);
+    await this.tween(200, (p) => {
+      const e = ease.outBack(p);
+      seal.scale.set(lerp(1.2, 1, e), lerp(0.84, 1, e));
+      const k = ease.outCubic(p);
+      press.clear().circle(0, 0, r + 2 + (10 + 3 * step) * k).stroke({ color: INK_STREAK, width: 3 * (1 - k) + 0.5, alpha: 0.7 * (1 - k) });
+    });
+    press.clear();
+    return { node: seal, value: t, step };
   }
 
   /** Two fast slashes crossing at the dead link. */
@@ -1793,9 +2009,9 @@ export class GameBoard {
    * GM pen: each verdict is drawn along the chain in order — OK strokes run edge to edge, the BREAK
    * stroke dies at the gap under an X with the lane mismatch noted. Later links stay ghosted.
    */
-  private async drawVerdictLinks(breakAt: number, token: number): Promise<Container[]> {
+  private async drawVerdictLinks(breakAt: number, token: number): Promise<StreakSeal[]> {
     this.inkLayer.removeChildren();
-    const stamps: Promise<Container>[] = [];
+    const stamps: Promise<StreakSeal>[] = [];
     if (this.links.length === 0) return [];
 
     const lastReveal = breakAt >= 0 ? breakAt : this.links.length - 1;
@@ -1857,64 +2073,86 @@ export class GameBoard {
   }
 
   /**
-   * Streak payout after the verdict ink: each "+100" stamp thumps in chain order and a copy flies
-   * into the hop counter, which ticks hops → total damage before the score stamp.
+   * Streak payout after the verdict ink, in chain order: each seal charges, its "+100" tears off (the seal
+   * is left spent) and is thrown into the DAMAGE tally, which rolls one wheel per seal (400 → 500 → 600 → 700).
+   * Later seals fly faster and land harder.
    */
-  private async streakTally(stamps: Container[], token: number): Promise<void> {
+  private async streakTally(seals: StreakSeal[], token: number): Promise<void> {
     const c = this.combo;
-    if (!stamps.length || !c.node.visible) return;
-    await this.wait(120);
-    for (let i = 0; i < stamps.length; i++) {
+    if (!seals.length || !c.node.visible) return;
+    await this.wait(140);
+    for (let i = 0; i < seals.length; i++) {
       if (token !== this.animToken) return;
-      const stamp = stamps[i];
-      const base = stamp.scale.x;
-      void this.tween(160, (p) => stamp.scale.set(base * (1 + 0.3 * Math.sin(Math.PI * p))));
-      const fly = new Text({
-        text: streakSealText(),
-        style: {
-          fontFamily: MARKER,
-          fontSize: 20,
-          fill: INK_STREAK,
-          stroke: { color: INK_SHADOW, width: 4, join: 'round' },
-          padding: 8,
-        },
-        resolution: 2,
-      });
-      fly.anchor.set(0.5);
-      this.hudLayer.addChild(fly);
-      const from = { x: stamp.x, y: stamp.y };
+      const { node: seal, value, step } = seals[i];
+      const base = seal.scale.x;
+      await this.tween(110, (p) => seal.scale.set(base * (1 + 0.3 * ease.outQuad(p))));
+      if (token !== this.animToken) return;
+      value.alpha = 0.3;
+      void this.tween(200, (p) => seal.scale.set(base * lerp(1.3, 1, ease.outBack(p))));
+
+      const size = 22 + 3 * step;
+      const mk = (alpha: number) => {
+        const t = new Text({
+          text: streakSealText(),
+          style: {
+            fontFamily: MARKER,
+            fontSize: size,
+            fill: INK_STREAK,
+            stroke: { color: INK_SHADOW, width: 4, join: 'round' },
+            padding: 8,
+          },
+          resolution: 2,
+        });
+        t.anchor.set(0.5);
+        t.alpha = alpha;
+        this.hudLayer.addChild(t);
+        return t;
+      };
+      // After-images trail the flyer as mass, not a drawn line.
+      const ghosts = [0.32, 0.5].map(mk);
+      const fly = mk(1);
+      const from = { x: seal.x, y: seal.y };
       const to = { x: c.node.x, y: c.node.y };
-      const ctrl = { x: lerp(from.x, to.x, 0.35), y: Math.min(from.y, to.y) - 70 };
-      await this.tween(230, (p) => {
-        const e = ease.inOutCubic(p);
-        const q = quad(from, ctrl, to, e);
-        fly.position.set(q.x, q.y);
-        fly.rotation = -0.3 * Math.sin(Math.PI * e);
-        fly.scale.set(lerp(1, 0.7, e));
-        fly.alpha = p > 0.85 ? 1 - (p - 0.85) / 0.15 : 1;
+      const ctrl = { x: lerp(from.x, to.x, 0.35), y: Math.min(from.y, to.y) - 90 };
+      const dur = Math.max(180, 250 - 30 * i);
+      await this.tween(dur, (p) => {
+        const place = (t: Text, lag: number) => {
+          const e = ease.inOutCubic(clamp(p - lag, 0, 1));
+          const q = quad(from, ctrl, to, e);
+          t.position.set(q.x, q.y);
+          t.rotation = -0.3 * Math.sin(Math.PI * e);
+          t.scale.set(lerp(1.25, 0.75, e));
+        };
+        place(fly, 0);
+        ghosts.forEach((g, gi) => place(g, 0.16 - gi * 0.08));
+        const fade = p > 0.85 ? 1 - (p - 0.85) / 0.15 : 1;
+        fly.alpha = fade;
+        ghosts.forEach((g, gi) => (g.alpha = (gi ? 0.5 : 0.32) * fade));
       });
       fly.destroy();
+      ghosts.forEach((g) => g.destroy());
       if (token !== this.animToken) return;
-      c.count += STREAK_BONUS;
-      c.num.text = String(c.count);
-      c.flash.text = c.num.text;
-      c.num.tint = 0xffffff;
-      c.label.text = 'DAMAGE';
-      c.punch = 1;
-      this.streakBurst(to);
-      await this.wait(70);
+      this.tallyAdd('streak', STREAK_BONUS, 1 + 0.25 * step);
+      this.streakBurst(to, step);
+      this.shakeBoard(0.8 + 0.8 * step, 170);
+      await this.wait(Math.max(40, 90 - 25 * i));
     }
-    await this.wait(200);
+    await this.wait(220);
   }
 
-  /** Small gold burst behind the counter when a streak point lands. */
-  private streakBurst(at: Vec): void {
+  /** Gold burst behind the counter when a streak point lands; wider and heavier per step. */
+  private streakBurst(at: Vec, step: number): void {
     this.addChromeFx((t, g) => {
-      const life = 260;
+      const life = 260 + 40 * step;
       if (t >= life) return false;
       const k = t / life;
       const e = ease.outCubic(k);
-      g.circle(at.x, at.y, 18 + 34 * e).stroke({ color: INK_STREAK, width: 3 * (1 - k) + 0.5, alpha: 0.9 * (1 - k) });
+      g.circle(at.x, at.y, 14 + (18 + 6 * step) * e).fill({ color: INK_STREAK, alpha: 0.22 * (1 - k) });
+      g.circle(at.x, at.y, 18 + (30 + 10 * step) * e).stroke({
+        color: INK_STREAK,
+        width: (2.5 + step) * (1 - k) + 0.5,
+        alpha: 0.9 * (1 - k),
+      });
       return true;
     });
   }

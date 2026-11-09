@@ -22,7 +22,7 @@ Open http://localhost:5173
 - Auto-resolve: add `&auto=resolve`
 - Attack slow-mo: add `&slow=0.25` · freeze N ms after a hop's contact: `&freeze=20` (`&freezeSkip=2` lets the first two hops play through)
 
-Contact screenshots: `node scripts/capture-contact.mjs` (tester), `node scripts/capture-gameplay-contact.mjs` (board), `node scripts/capture-filmstrip.mjs` (slow-mo strips); set `MEDIA_DIR` for the output folder.
+Contact screenshots: `node scripts/capture-contact.mjs` (tester), `node scripts/capture-gameplay-contact.mjs` (board), `node scripts/capture-filmstrip.mjs` (slow-mo strips); set `MEDIA_DIR` for the output folder. Big-number FX (odometer tally, seals, score stamp, HP header): `node scripts/capture-big-number-fx.mjs` (`ONLY=frames,hp,clip,seedscan,pvc`).
 
 ## How to play
 
