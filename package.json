@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "pixi.js": "^8.8.1"
+    "pixi.js": "^8.8.1",
+    "wasmoon": "^1.16.0"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

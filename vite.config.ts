@@ -7,12 +7,18 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
+    target: 'es2022',
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
         pvc: resolve(__dirname, 'pvc.html'),
         tester: resolve(__dirname, 'tester.html'),
+        editor: resolve(__dirname, 'editor.html'),
       },
     },
   },
+  optimizeDeps: {
+    exclude: ['wasmoon'],
+  },
+  assetsInclude: ['**/*.wasm'],
 });
