@@ -2,12 +2,12 @@ import '../style.css';
 import './pvc.css';
 import { BoardPhase, GameBoard } from '../game/board';
 import { AiDifficulty, SLIP_RATE, STREAK_MISS_RATE, planAiLine } from '../game/ai';
-import { hopDamageFromLinks } from '../game/hopDamage';
+import { BREAK_RECOIL, DAMAGE_UNIT, LOW_HP, STARTING_HP, hopDamageFromLinks } from '../game/hopDamage';
 import { evaluateLinks } from '../game/rules';
 import { SeededRng } from '../game/rng';
 import { HAND_SIZE, TavernPile } from '../game/tavernDeck';
 
-const START_HP = 28;
+const START_HP = STARTING_HP;
 
 type Side = 'player' | 'cpu';
 
@@ -105,7 +105,7 @@ function setHpInstant(side: Side, hp: number): void {
   el.classList.add('no-anim');
   el.style.setProperty('--hp', String(hp / START_HP));
   el.classList.remove('hit', 'recoil', 'ko');
-  el.classList.toggle('low', hp > 0 && hp <= 5);
+  el.classList.toggle('low', hp > 0 && hp <= LOW_HP);
   void el.offsetWidth;
   el.classList.remove('no-anim');
 }
@@ -118,7 +118,7 @@ function popDelta(side: Side, amount: number, kind: 'hit' | 'recoil'): void {
   pop.addEventListener('animationend', () => pop.remove());
 }
 
-/** Bar drops at once (white ghost trails it); the number counts down one HP per tick. */
+/** Bar drops at once (white ghost trails it); the number counts down in DAMAGE_UNIT steps. */
 async function animateHp(side: Side, to: number, kind: 'hit' | 'recoil'): Promise<void> {
   const el = fighterEls[side];
   const from = shownHp[side];
@@ -129,13 +129,17 @@ async function animateHp(side: Side, to: number, kind: 'hit' | 'recoil'): Promis
   popDelta(side, from - to, kind);
   restartClass(el, kind);
   el.style.setProperty('--hp', String(to / START_HP));
-  for (let hp = from - 1; hp >= to; hp--) {
+  // Same tick count as the old 1-HP scale: one tick per DAMAGE_UNIT.
+  for (let hp = from - DAMAGE_UNIT; hp > to; hp -= DAMAGE_UNIT) {
     await wait(fastForward ? 35 : 85);
     shownHp[side] = hp;
     hpEls[side].textContent = String(hp);
     restartClass(hpEls[side], 'tick');
   }
-  el.classList.toggle('low', to > 0 && to <= 5);
+  shownHp[side] = to;
+  hpEls[side].textContent = String(to);
+  restartClass(hpEls[side], 'tick');
+  el.classList.toggle('low', to > 0 && to <= LOW_HP);
   el.classList.toggle('ko', to <= 0);
   window.setTimeout(() => el.classList.remove(kind), 260);
 }
@@ -236,8 +240,8 @@ async function resolveAttack(attacker: Side): Promise<void> {
   await board.resolve({
     damageMode: 'hops',
     onRecoil: () => {
-      if (attacker === 'player') playerHp = Math.max(0, playerHp - 1);
-      else cpuHp = Math.max(0, cpuHp - 1);
+      if (attacker === 'player') playerHp = Math.max(0, playerHp - BREAK_RECOIL);
+      else cpuHp = Math.max(0, cpuHp - BREAK_RECOIL);
       return animateHp(attacker, attacker === 'player' ? playerHp : cpuHp, 'recoil');
     },
   });

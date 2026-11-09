@@ -11,13 +11,13 @@ npm run dev
 
 Open http://localhost:5173
 
-- **PvC (vs CPU):** http://localhost:5173/pvc.html — 28-HP duel, hand of 6, Streak damage, Easy/Normal/Hard slip + streak-miss rates, seeded 20-card tavern deck (5 G · 5 A · 5 S · 5 K)
+- **PvC (vs CPU):** http://localhost:5173/pvc.html — 2800-HP duel, hand of 6, Streak damage (×100 scale), Easy/Normal/Hard slip + streak-miss rates, seeded 20-card tavern deck (5 G · 5 A · 5 S · 5 K)
 - **Attack tester gallery:** http://localhost:5173/tester.html — speed select, *Freeze on contact*, *Streak* weight (1st–3rd), *Play all*; URL `?speed=0.25&freeze=20&streak=3` presets them
 - Hand-building UI: http://localhost:5173/?demo=hand
 - Valid full chain (G→K→A→S→G): http://localhost:5173/?demo=1
 - Keep attacks (G→G + A→A): http://localhost:5173/?demo=keeps
 - Lane ping-pong (G→K→S→K→A): http://localhost:5173/?demo=rebound
-- Streak juggle, hop scoring (S→K→S→K→S = 4 + 3): http://localhost:5173/?demo=streak&auto=resolve · press run (G→G→G→K→A): `?demo=streak-press`
+- Streak juggle, hop scoring (S→K→S→K→S = 400 + 300): http://localhost:5173/?demo=streak&auto=resolve · press run (G→G→G→K→A): `?demo=streak-press`
 - Illegal G→A break: http://localhost:5173/?demo=break
 - Auto-resolve: add `&auto=resolve`
 - Attack slow-mo: add `&slow=0.25` · freeze N ms after a hop's contact: `&freeze=20` (`&freezeSkip=2` lets the first two hops play through)
