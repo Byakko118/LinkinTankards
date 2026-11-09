@@ -1,19 +1,21 @@
 import type { ScriptedCardDef } from './types';
 
 const BLANK_SCRIPT = `-- hooks: score
--- Blank card skeleton — start here for a new effect.
+-- fx = effects toolkit the game injects into this script (host API).
+-- fx.self  = this card's side right now (line, slot, chain, hand, hp, …)
+-- fx.add(fx.self, 100, "effect")  = add 100 to THIS card's effect damage
+-- fx.deal(fx.enemy.hp, 100, "effect", fx.self)  = hit enemy HP directly
 -- Add "clash" to the hooks line when you implement on_clash.
 
 function on_score(fx)
-  -- Reads: fx.self / fx.enemy (.line .hand .unplayed .draw .discard .hp .slot .chain)
-  -- Writes: fx.add(card_or_self, amount, "effect")
-  --         fx.deal(fx.enemy.hp, amount, "effect", fx.self)
+  -- SCORE: hop/streak already attributed; write with fx.add / fx.deal
   local _ = fx.self.slot
 end
 
 -- function on_clash(fx)
---   -- Reads: fx.outgoing(enemy_card)
---   -- Writes: fx.block_slot(slot, amount)
+--   -- CLASH: both sides scored; block incoming with fx.block_slot
+--   -- local foe = fx.enemy.line.cards[fx.self.slot]
+--   -- fx.block_slot(fx.self.slot, math.floor(fx.outgoing(foe) / 2))
 -- end
 `;
 

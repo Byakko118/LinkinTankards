@@ -23,11 +23,24 @@
             <a class="nav-link" href="/tester.html">Attacks</a>
           </nav>
         </div>
-        <p class="tag">
-          Monaco + sandboxed Lua 5.4 (<code>fx</code> host API). SCORE → CLASH → APPLY on a mock ResolveView —
-          not wired into live PvC resolve yet.
+        <p class="tag tag-lead">
+          <code>fx</code> = the effects toolkit the game gives your card — read the board, add damage, deal HP, or block hits.
+        </p>
+        <p class="tag tag-sub">
+          Monaco + sandboxed Lua 5.4. SCORE → CLASH → APPLY on a mock ResolveView — not wired into live PvC resolve yet.
         </p>
       </header>
+
+      <div id="fx-welcome" class="fx-welcome" hidden>
+        <div class="fx-welcome-inner" role="status">
+          <p>
+            <strong>What is <code>fx</code>?</strong>
+            Every card script receives <code>fx</code> from the game — an injected host API, not a Lua library you import.
+            Use it to inspect <code>fx.self</code> / <code>fx.enemy</code> and to write damage with <code>fx.add</code>, <code>fx.deal</code>, or <code>fx.block_slot</code>.
+          </p>
+          <button type="button" id="fx-welcome-dismiss" class="ghost">Got it</button>
+        </div>
+      </div>
 
       <div class="layout">
         <section class="panel script-panel">

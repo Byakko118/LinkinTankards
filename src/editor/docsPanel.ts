@@ -1,12 +1,34 @@
 /** In-editor docs distilled from store docs/effect-dsl.md (Lua + fx v0). */
 
 export const EFFECT_DOCS_HTML = `
-<h3>Hooks</h3>
+<h3>Start here</h3>
+<p class="docs-note">
+  <code>fx</code> is the <strong>effects host API</strong> the game injects into each card script.
+  You do not import it — the runtime binds <code>fx</code> before calling your hooks.
+  Through it you read the board (<code>fx.self</code> / <code>fx.enemy</code>) and write damage
+  (<code>fx.add</code>, <code>fx.deal</code>, <code>fx.block_slot</code>).
+</p>
+<ul>
+  <li><code>on_score(fx)</code> — runs during <strong>SCORE</strong>, after hop/streak are on the cards, one card at a time (slot ascending). Most starters live here.</li>
+  <li><code>on_clash(fx)</code> — runs during <strong>CLASH</strong>, after <em>both</em> sides finished SCORE. Shield-style blocks only.</li>
+</ul>
+<p class="docs-note">BUILD never runs scripts (no spoilers). Failed scripts no-op that card and continue.</p>
+
+<h3>Example — Thunderer</h3>
+<pre class="docs-pre">-- SCORE: +100 if this card sits in an S→K→S triple
+function on_score(fx)
+  local line, i = fx.self.line, fx.self.slot
+  local L = line.cards
+  -- …check neighbors for S K S…
+  fx.add(fx.self, 100, "effect")  -- bump this card's effect channel
+end</pre>
+<p class="docs-note">Pick <strong>Thunderer</strong> in the Card menu to load the full script + mock line.</p>
+
+<h3>Hooks (detail)</h3>
 <ul>
   <li><code>on_score(fx)</code> — after hop/streak attributed; per slot ascending. Writes: <code>fx.add</code>, <code>fx.deal</code>.</li>
   <li><code>on_clash(fx)</code> — after both SCORE passes; mirrored slots. Writes: <code>fx.block_slot</code>. Reads frozen <code>fx.outgoing</code>.</li>
 </ul>
-<p class="docs-note">BUILD never runs scripts (no spoilers). Failed scripts no-op that card and continue.</p>
 
 <h3>fx allow-list</h3>
 <pre class="docs-pre">-- reads

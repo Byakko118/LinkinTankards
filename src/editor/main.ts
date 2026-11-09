@@ -113,6 +113,27 @@ const enemyFacesEl = requireEl<HTMLInputElement>('enemy-faces');
 
 mountDocsPanel(docsPanel);
 
+const WELCOME_KEY = 'lt-fx-welcome-dismissed';
+const welcomeEl = document.getElementById('fx-welcome');
+const welcomeDismissEl = document.getElementById('fx-welcome-dismiss');
+if (welcomeEl && welcomeDismissEl) {
+  try {
+    if (localStorage.getItem(WELCOME_KEY) !== '1') {
+      welcomeEl.hidden = false;
+    }
+  } catch {
+    welcomeEl.hidden = false;
+  }
+  welcomeDismissEl.addEventListener('click', () => {
+    welcomeEl.hidden = true;
+    try {
+      localStorage.setItem(WELCOME_KEY, '1');
+    } catch {
+      /* ignore quota / private mode */
+    }
+  });
+}
+
 const blank = starterById('blank') ?? STARTER_CARDS[0];
 const editor = createLuaEditor(monacoHost, blank.script);
 

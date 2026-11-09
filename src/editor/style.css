@@ -69,17 +69,67 @@ h2 {
 }
 
 .tag {
-  margin: 0.55rem 0 1.35rem;
+  margin: 0.55rem 0 0;
   color: var(--muted);
   max-width: 68ch;
   line-height: 1.5;
   font-size: 1rem;
 }
 
+.tag-lead {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tag-sub {
+  margin: 0.35rem 0 1.15rem;
+  font-size: 0.92rem;
+}
+
 .tag code {
   font-family: var(--mono);
   font-size: 0.9em;
   color: #f0d2a8;
+}
+
+.fx-welcome {
+  margin: 0 0 1rem;
+}
+
+.fx-welcome-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: rgba(34, 25, 16, 0.95);
+}
+
+.fx-welcome-inner p {
+  margin: 0;
+  flex: 1 1 18rem;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.fx-welcome-inner strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.fx-welcome-inner code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: #f0d2a8;
+}
+
+.fx-welcome-inner button {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 .nav {
@@ -183,7 +233,7 @@ body.docs-collapsed .docs-panel {
   color: var(--ink);
 }
 
-.docs-panel h3:first-child {
+.docs-panel h3:first-of-type {
   margin-top: 0;
 }
 
