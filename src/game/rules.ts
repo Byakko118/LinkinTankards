@@ -149,7 +149,10 @@ export function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-export function drawHand(deck: CardDef[], count = 5): { hand: CardDef[]; rest: CardDef[] } {
+/** Locked global hand size (solo, PvC, chrome pips) — play line stays 1–5. */
+export const HAND_SIZE = 6;
+
+export function drawHand(deck: CardDef[], count = HAND_SIZE): { hand: CardDef[]; rest: CardDef[] } {
   if (deck.length < count) {
     const fresh = buildDeck();
     return { hand: fresh.slice(0, count), rest: fresh.slice(count) };
