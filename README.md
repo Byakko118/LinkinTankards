@@ -1,6 +1,6 @@
 # Linkin' Tankards — gameplay loop prototype
 
-Rough PixiJS board: deal a hand of 5, **build the play line yourself**, watch chain travel stop at broken links, resolve prefix damage at the **×100** combat scale (hop 100, streak +100, HP 2800).
+Rough PixiJS board: deal a hand of **6**, **build the play line yourself** (1–5), watch chain travel stop at broken links, resolve prefix damage at the **×100** combat scale (hop 100, streak +100, HP 2800).
 
 ## Run
 
@@ -28,7 +28,7 @@ Contact screenshots: `node scripts/capture-contact.mjs` (tester), `node scripts/
 
 ## How to play
 
-1. **Deal 5** — cards land in the **hand** strip (not on the table).
+1. **Deal 6** — cards land in the **hand** strip (not on the table).
 2. **Click a hand card** to append it to the play line.
 3. **Click a played card** to return it *and everything after it* to hand.
 4. **Clear line** dumps the whole play line back to hand.

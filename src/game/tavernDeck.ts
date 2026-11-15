@@ -1,10 +1,11 @@
-import { CardDef, CardType, makeCard } from './rules';
+import { CardDef, CardType, HAND_SIZE, makeCard } from './rules';
 import { SeededRng, shuffleWithRng } from './rng';
 
 const TAVERN_TYPES: CardType[] = ['G', 'A', 'S', 'K'];
 const PER_TYPE = 5;
 
-export const HAND_SIZE = 6;
+/** Re-export so PvC / board / checks keep a single import path. */
+export { HAND_SIZE };
 
 export function buildTavernDeck(): CardDef[] {
   const deck: CardDef[] = [];

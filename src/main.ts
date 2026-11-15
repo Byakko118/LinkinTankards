@@ -1,7 +1,7 @@
 import './style.css';
 import { setAttackFreezeOnContact, setAttackTimeScale } from './game/attacks';
 import { GameBoard } from './game/board';
-import { CardDef, CardType, buildDeck, drawHand, makeCard } from './game/rules';
+import { CardDef, CardType, HAND_SIZE, buildDeck, drawHand, makeCard } from './game/rules';
 
 const host = document.getElementById('board-host');
 const turnNode = document.getElementById('turn-value');
@@ -86,7 +86,7 @@ function paintHud(): void {
   btnDeal.disabled = busy || !empty;
   btnRedraw.disabled = busy || !building;
   btnClear.disabled = busy || !building || snap.playCount === 0;
-  // Rough loop: resolve with ≥1 card on the play line (need not play all 5).
+  // Rough loop: resolve with ≥1 card on the play line (need not fill MAX_LINE).
   btnResolve.disabled = busy || !building || snap.playCount < 1;
   btnNext.disabled = busy || !resolved;
 }
@@ -99,7 +99,7 @@ async function deal(): Promise<void> {
   if (busy) return;
   busy = true;
   paintHud();
-  const drawn = drawHand(deck, 5);
+  const drawn = drawHand(deck, HAND_SIZE);
   deck = drawn.rest;
   board.dealToHand(drawn.hand);
   busy = false;
@@ -111,7 +111,7 @@ async function redraw(): Promise<void> {
   busy = true;
   paintHud();
   deck = [...deck, ...allHeldCards()];
-  const drawn = drawHand(deck, 5);
+  const drawn = drawHand(deck, HAND_SIZE);
   deck = drawn.rest;
   board.dealToHand(drawn.hand);
   busy = false;
@@ -139,7 +139,7 @@ async function nextTurn(): Promise<void> {
   busy = true;
   paintHud();
   // Discard leftover hand + played cards for this rough loop.
-  const drawn = drawHand(deck, 5);
+  const drawn = drawHand(deck, HAND_SIZE);
   deck = drawn.rest;
   board.dealToHand(drawn.hand);
   busy = false;
@@ -175,7 +175,8 @@ if (demoMode) {
                 : demoPlayTypes();
   const cards = types.map((t) => makeCard(t));
   if (handOnly) {
-    // Hand strip filled, play line empty — for build-UI screenshots.
+    // Full locked hand of 6 in the strip; play line empty — for build-UI screenshots.
+    while (cards.length < HAND_SIZE) cards.push(makeCard('G'));
     board.dealToHand(cards);
   } else {
     board.dealAndPlay(cards, cards);
