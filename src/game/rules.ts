@@ -97,7 +97,7 @@ export function firstBreakIndex(links: readonly LinkInfo[]): number {
   return links.findIndex((l) => !l.valid);
 }
 
-/** Damage from cards in the unbroken chain prefix only. */
+/** Damage from cards in the unbroken chain prefix only (legacy printed-face sum). */
 export function resolveChainDamage(cards: readonly CardDef[], links: readonly LinkInfo[]): number {
   if (cards.length === 0) return 0;
   const unbroken = chainLength(links);
@@ -105,11 +105,15 @@ export function resolveChainDamage(cards: readonly CardDef[], links: readonly Li
   return cards.slice(0, Math.min(cardsInChain, cards.length)).reduce((sum, c) => sum + c.damage, 0);
 }
 
-const TYPE_DAMAGE: Record<CardType, number> = {
-  G: 3,
-  A: 4,
-  S: 3,
-  K: 5,
+/**
+ * Printed face damage (×100 global standard — same magnitudes as hopDamage.DAMAGE_UNIT).
+ * Live combat / editor / PvC use hop+streak; these faces are for ?score=cards demos only.
+ */
+export const TYPE_DAMAGE: Record<CardType, number> = {
+  G: 300,
+  A: 400,
+  S: 300,
+  K: 500,
 };
 
 const DECK_COUNTS: Record<CardType, number> = {

@@ -197,7 +197,7 @@ export const SIDE_FIELDS: FxSymbol[] = [
     label: 'hp',
     insertText: 'hp',
     detail: 'number',
-    documentation: 'Current HP (×100 scale).',
+    documentation: 'Current HP at the global ×100 scale (starting 2800).',
     kind: 'property',
   },
   {

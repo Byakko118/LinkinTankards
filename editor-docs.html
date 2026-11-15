@@ -64,7 +64,9 @@ end</pre>
             <li><strong>BUILD</strong> never runs scripts (no spoilers of OK/BREAK or damage).</li>
           </ul>
           <p>
-            Indices are <strong>1-based</strong> (Lua). Damage uses the locked ×100 scale (so <code>100</code> = one hop unit on the tally).
+            Indices are <strong>1-based</strong> (Lua). Damage uses the <strong>global ×100 scale</strong>
+            (same as PvC): hop <code>100</code>, streak <code>+100</code>, recoil <code>100</code>, starting HP <code>2800</code>.
+            Effect amounts like Thunderer’s <code>+100</code> or Golem’s <code>+50</code> per G are already on that scale — do not write 1-scale numbers.
           </p>
         </section>
 
