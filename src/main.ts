@@ -23,8 +23,8 @@ const linksEl = linksNode;
 
 const params = new URLSearchParams(window.location.search);
 const demoMode = params.has('demo');
-// ?score=hops scores like PvC (100 per hop + Streak) instead of printed card damage; streak demos imply it.
-const hopScoring = params.get('score') === 'hops' || (params.get('demo') ?? '').startsWith('streak');
+// Global standard: hop + Streak at ×100. Opt into legacy printed-face sums with ?score=cards.
+const hopScoring = params.get('score') !== 'cards';
 
 // Tuning/capture hooks: ?slow=0.25 slow-mo; ?freeze=20 holds a hop 20 ms after contact
 // (&freezeSkip=2 lets the first two hops play through and freezes the third).
@@ -128,7 +128,7 @@ async function resolve(): Promise<void> {
   if (busy || board.snapshot.phase !== 'building' || board.snapshot.playCount < 1) return;
   busy = true;
   paintHud();
-  await board.resolve(hopScoring ? { damageMode: 'hops' } : undefined);
+  await board.resolve({ damageMode: hopScoring ? 'hops' : 'cards' });
   busy = false;
   paintHud();
 }

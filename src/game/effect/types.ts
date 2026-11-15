@@ -20,7 +20,7 @@ export interface ScriptedCardDef {
   id: string;
   type: CardType;
   name: string;
-  /** Legacy display damage; hop/streak/effect own real combat numbers. */
+  /** Printed face damage at ×100 scale (TYPE_DAMAGE); hop/streak/effect own real combat. */
   damage: number;
   script: string;
   hooks: EffectHook[];

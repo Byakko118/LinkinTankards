@@ -4,8 +4,10 @@ import { CardType, LinkInfo, chainLength } from './rules';
 export const MAX_LINE = 5;
 
 /**
- * Combat number scale (locked 2026-11-09). Pure ×100 of the 1-HP rules so ratios stay
- * identical; a future Mult channel can multiply these unit values cleanly.
+ * Global combat number scale (locked 2026-11-09; universal as of 2026-11-15).
+ * Pure ×100 of the old 1-scale rules — hop / streak / recoil / HP / printed faces /
+ * effect-editor channels all share this magnitude. Do not invent new scales.
+ * A future Mult channel multiplies these unit values cleanly.
  */
 export const DAMAGE_UNIT = 100;
 export const HOP_DAMAGE = DAMAGE_UNIT;

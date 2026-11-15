@@ -82,7 +82,10 @@ export interface ResolveOptions {
 }
 
 export interface BoardOptions {
-  /** Printed per-card damage (solo loop). PvC scores hops, so its faces show the lane path instead. */
+  /**
+   * Show printed per-card damage on faces (×100 TYPE_DAMAGE). Default false — lane path,
+   * matching PvC / hop scoring. Opt in for ?score=cards demos.
+   */
   cardDamage?: boolean;
 }
 
@@ -340,7 +343,7 @@ export class GameBoard {
 
   constructor(app: Application, opts: BoardOptions = {}) {
     this.app = app;
-    this.cardDamage = opts.cardDamage ?? true;
+    this.cardDamage = opts.cardDamage ?? false;
     app.stage.addChild(this.root);
     this.shadowLayer.addChild(this.chromeG);
     this.root.addChild(
@@ -570,7 +573,8 @@ export class GameBoard {
     this.phase = 'resolving';
     this.emit();
     const token = ++this.animToken;
-    const damageMode = opts?.damageMode ?? 'cards';
+    // Global standard is hop+streak ×100; printed-face sum is opt-in via damageMode: 'cards'.
+    const damageMode = opts?.damageMode ?? 'hops';
     this.scoring = damageMode;
     const combo = comboDamageFromLinks(this.links);
     const dmg = damageMode === 'hops' ? combo.total : resolveChainDamage(this.play, this.links);

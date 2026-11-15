@@ -48,6 +48,7 @@ fx.add / fx.deal / fx.block_slot</pre>
 
 <h3>Five starters</h3>
 <ul>
+  <li><strong>Scale</strong> — all amounts are ×100 (hop 100, HP 2800); same as PvC</li>
   <li><strong>Thunderer</strong> — +100 in an S→K→S triple</li>
   <li><strong>Shield</strong> — block half of enemy same-slot outgoing</li>
   <li><strong>Golem</strong> — +50 per G in <code>fx.my_chain()</code></li>

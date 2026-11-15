@@ -32,7 +32,7 @@ const SCENARIOS: Record<string, Scenario> = {
     enemyFaces: false,
   },
   thunderer: {
-    hint: 'S→K→S triple with Thunderer as the middle K — expects +100 effect.',
+    hint: 'S→K→S triple with Thunderer as the middle K — expects +100 effect (×100 scale).',
     selfLine: 'S @ S',
     selfUnplayed: 'G A',
     selfDraw: 'G K',

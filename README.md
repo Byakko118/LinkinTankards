@@ -1,6 +1,6 @@
 # Linkin' Tankards — gameplay loop prototype
 
-Rough PixiJS board: deal a hand of 5, **build the play line yourself**, watch chain travel stop at broken links, resolve prefix damage.
+Rough PixiJS board: deal a hand of 5, **build the play line yourself**, watch chain travel stop at broken links, resolve prefix damage at the **×100** combat scale (hop 100, streak +100, HP 2800).
 
 ## Run
 
@@ -17,10 +17,12 @@ Open http://localhost:5173
 - Valid full chain (G→K→A→S→G): http://localhost:5173/?demo=1
 - Keep attacks (G→G + A→A): http://localhost:5173/?demo=keeps
 - Lane ping-pong (G→K→S→K→A): http://localhost:5173/?demo=rebound
-- Streak juggle, hop scoring (S→K→S→K→S = 400 + 300): http://localhost:5173/?demo=streak&auto=resolve · press run (G→G→G→K→A): `?demo=streak-press`
+- Streak juggle (S→K→S→K→S = 400 + 300): http://localhost:5173/?demo=streak&auto=resolve · press run (G→G→G→K→A): `?demo=streak-press`
 - Illegal G→A break: http://localhost:5173/?demo=break
 - Auto-resolve: add `&auto=resolve`
+- Legacy printed-face damage sum (still ×100 faces): add `&score=cards`
 - Attack slow-mo: add `&slow=0.25` · freeze N ms after a hop's contact: `&freeze=20` (`&freezeSkip=2` lets the first two hops play through)
+- **Lua effect editor:** http://localhost:5173/editor.html · tutorials: `/editor-docs.html` (same ×100 channels)
 
 Contact screenshots: `node scripts/capture-contact.mjs` (tester), `node scripts/capture-gameplay-contact.mjs` (board), `node scripts/capture-filmstrip.mjs` (slow-mo strips); set `MEDIA_DIR` for the output folder. Big-number FX (odometer tally, seals, score stamp, HP header): `node scripts/capture-big-number-fx.mjs` (`ONLY=frames,hp,clip,seedscan,pvc`).
 
